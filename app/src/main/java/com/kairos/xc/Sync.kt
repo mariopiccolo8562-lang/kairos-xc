@@ -39,14 +39,22 @@ object Sync {
     private fun sig(pls: List<Playlist>): String = pls.joinToString("§") { it.sig() }
 
     @Volatile private var failAt = 0L
+    /** portale dell'ultimo errore: l'attesa di 30 minuti vale solo per lui, non per gli altri portali */
+    @Volatile private var failKey = ""
 
     fun needed(): Boolean {
         val pls = K.active()
         if (pls.isEmpty()) return false
+        val ids = pls.map { it.id }
         // dopo un errore si riprova al massimo ogni 30 minuti (o subito con «Aggiorna liste»)
-        if (System.currentTimeMillis() - failAt < 30 * 60_000L) return false
-        return sig(pls) != Store.syncSig || System.currentTimeMillis() - Store.syncAt > 12 * 3600_000L || Db.isEmpty()
+        if (failKey == ids.joinToString(",") && System.currentTimeMillis() - failAt < 30 * 60_000L) return false
+        if (sig(pls) != Store.syncSigOf(ids) || System.currentTimeMillis() - Store.syncAtOf(ids) > 12 * 3600_000L) return true
+        // controllo sul disco una volta sola per portale (needed() si chiama a ogni schermata)
+        val key = ids.joinToString(",")
+        if (dataOk != key) { if (!Db.hasData(ids)) return true; dataOk = key }
+        return false
     }
+    @Volatile private var dataOk = ""
 
     fun start(force: Boolean = false) {
         if (running) return
@@ -54,6 +62,7 @@ object Sync {
         if (pls.isEmpty()) return
         if (!force && !needed()) return
         running = true
+        dataOk = ""
         pct = 0
         error = ""
         emit(true)
@@ -78,8 +87,9 @@ object Sync {
         try {
             Vpns.awaitForced() // VPN «sempre attiva»: le liste passano dalla VPN
             val db = Db.w
-            // playlist tolte dal pannello (o di un altro profilo): via dall'archivio
-            val keep = pls.map { it.id }
+            // sul disco restano il portale in uso e quello usato prima (per tornarci al volo); gli altri si tolgono
+            val assigned = K.playlists().map { it.id }
+            val keep = (pls.map { it.id } + listOf(Store.plPrev).filter { it in assigned }).distinct()
             db.beginTransactionNonExclusive()
             try {
                 Db.dropOthers(db, keep)
@@ -113,11 +123,11 @@ object Sync {
                 phase++
                 emit(true)
             }
+            val ids = pls.map { it.id }
             if (errors.isEmpty()) {
-                Store.syncSig = sig(pls)
-                Store.syncAt = System.currentTimeMillis()
+                Store.setSynced(ids, sig(pls), System.currentTimeMillis())
                 failAt = 0L
-            } else failAt = System.currentTimeMillis()
+            } else { failAt = System.currentTimeMillis(); failKey = ids.joinToString(",") }
             error = errors.joinToString(" · ")
         } catch (t: Throwable) {
             error = t.message ?: t.javaClass.simpleName
@@ -127,12 +137,15 @@ object Sync {
             pct = 100
             phase++
             emit(true)
+            // nel frattempo è stato scelto un altro portale: si scaricano subito le sue liste
+            ui { start() }
         }
     }
 
     /** «Aggiorna liste» dalle Impostazioni: si riprova subito anche dopo un errore */
     fun force() {
         failAt = 0L
+        failKey = ""
         start(force = true)
     }
 

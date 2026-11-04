@@ -46,8 +46,6 @@
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode" />
         <activity android:name=".LiveActivity" android:exported="false" android:screenOrientation="sensorLandscape"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode" />
-        <activity android:name=".CatchupActivity" android:exported="false" android:screenOrientation="sensorLandscape"
-            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode" />
         <activity android:name=".VodActivity" android:exported="false" android:screenOrientation="sensorLandscape"
             android:windowSoftInputMode="adjustNothing|stateHidden"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode" />

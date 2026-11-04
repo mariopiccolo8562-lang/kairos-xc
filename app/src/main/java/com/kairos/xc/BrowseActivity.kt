@@ -15,7 +15,7 @@ import androidx.recyclerview.widget.RecyclerView
 import org.json.JSONObject
 
 /**
- * Home, Film e Serie TV: barra in alto come MirkoTeam (Home, Live TV, Film, Serie TV, Catchup + icone),
+ * Film, Serie TV e Preferiti: barra in alto (Home, Live TV, Film, Serie TV + icone),
  * riquadro grande e righe di locandine.
  * Apertura istantanea: l'ultima Home costruita è salvata in un piccolo file ([Snap]) e compare subito,
  * prima di qualsiasi lettura del database; poi viene ricontrollata in sottofondo.
@@ -101,7 +101,7 @@ open class BrowseActivity : BaseActivity() {
 
     /* ---------------- schede in alto ---------------- */
     private fun tabs() {
-        val map = linkedMapOf(R.id.tabHome to "home", R.id.tabLive to "live", R.id.tabFilm to "vod", R.id.tabSeries to "series", R.id.tabCatchup to "catchup")
+        val map = linkedMapOf(R.id.tabHome to "home", R.id.tabLive to "live", R.id.tabFilm to "vod", R.id.tabSeries to "series")
         for ((id, k) in map) {
             val t = findViewById<TextView>(id)
             t.isActivated = k == kind
@@ -111,9 +111,8 @@ open class BrowseActivity : BaseActivity() {
             t.setOnClickListener {
                 if (k == kind) { focusFirst(); return@setOnClickListener }
                 when (k) {
-                    "home" -> open(HomeActivity::class.java)
+                    "home" -> { finish(); return@setOnClickListener } // la Home (menu a cerchi) è sotto: si torna lì
                     "live" -> open(LiveActivity::class.java)
-                    "catchup" -> open(CatchupActivity::class.java)
                     else -> open(BrowseActivity::class.java) { putExtra("kind", k) }
                 }
                 // le schede non si accumulano: da Film a Serie si torna comunque alla Home con INDIETRO

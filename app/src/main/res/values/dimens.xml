@@ -27,4 +27,8 @@
     <dimen name="code">34sp</dimen>
     <dimen name="hero">30sp</dimen>
     <dimen name="logo">34dp</dimen>
+    <dimen name="home_tile">60dp</dimen>
+    <dimen name="home_pad">22dp</dimen>
+    <dimen name="home_pad_v">16dp</dimen>
+    <dimen name="home_gap">34dp</dimen>
 </resources>

@@ -38,7 +38,7 @@ object Db {
         override fun onUpgrade(db: SQLiteDatabase, oldV: Int, newV: Int) {
             listOf("cat", "live", "vod", "series", "ep").forEach { db.execSQL("DROP TABLE IF EXISTS $it") }
             onCreate(db)
-            Store.syncSig = "" // archivio nuovo: le liste si ricaricano
+            Store.clearSync() // archivio nuovo: le liste si ricaricano
         }
     }
 
@@ -130,6 +130,15 @@ object Db {
         r.rawQuery("SELECT COUNT(*) FROM $table WHERE ${q.where}", q.args.toTypedArray()).use { c -> return if (c.moveToFirst()) c.getInt(0) else 0 }
     }
 
+    /** ci sono già canali, film o serie di queste playlist? */
+    fun hasData(pls: List<String>): Boolean = try {
+        if (pls.isEmpty()) false else {
+            val ph = pls.joinToString(",") { "?" }
+            val a = (pls + pls + pls).toTypedArray()
+            r.rawQuery("SELECT EXISTS(SELECT 1 FROM live WHERE pl IN ($ph)) OR EXISTS(SELECT 1 FROM vod WHERE pl IN ($ph)) OR EXISTS(SELECT 1 FROM series WHERE pl IN ($ph))", a).use { c -> c.moveToFirst() && c.getLong(0) != 0L }
+        }
+    } catch (_: Exception) { false }
+
     fun isEmpty(): Boolean = try {
         r.rawQuery("SELECT EXISTS(SELECT 1 FROM live) OR EXISTS(SELECT 1 FROM vod) OR EXISTS(SELECT 1 FROM series)", null).use { c -> !c.moveToFirst() || c.getLong(0) == 0L }
     } catch (_: Exception) { true }
@@ -146,14 +155,6 @@ object Db {
         }
         val c = r.rawQuery("SELECT $LIVE_COLS FROM live WHERE ${q.where} ORDER BY num, _id", q.args.toTypedArray())
         c.count // riempie la prima finestra qui, fuori dal thread dell'interfaccia
-        return c
-    }
-
-    /** canali con la registrazione dei programmi passati (Catchup): giorni disponibili in «arch» */
-    fun catchup(pls: List<String>, kids: Boolean): Cursor {
-        val q = base(pls, kids)
-        val c = r.rawQuery("SELECT $LIVE_COLS, arch FROM live WHERE ${q.where} AND arch > 0 ORDER BY num, _id", q.args.toTypedArray())
-        c.count
         return c
     }
 

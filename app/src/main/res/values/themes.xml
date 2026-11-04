@@ -109,4 +109,52 @@
         <item name="android:focusable">true</item>
         <item name="android:singleLine">true</item>
     </style>
+    <!-- Home a cerchi (stile MirkoTeam, grafica Kairos XC) -->
+    <style name="HomeTile">
+        <item name="android:layout_width">@dimen/home_tile</item>
+        <item name="android:layout_height">@dimen/home_tile</item>
+        <item name="android:layout_marginLeft">10dp</item>
+        <item name="android:background">@drawable/home_tile</item>
+        <item name="android:focusable">true</item>
+        <item name="android:clickable">true</item>
+        <item name="android:gravity">center</item>
+        <item name="android:orientation">vertical</item>
+    </style>
+    <style name="HomeTileIcon">
+        <item name="android:layout_width">26dp</item>
+        <item name="android:layout_height">26dp</item>
+        <item name="android:scaleType">fitCenter</item>
+        <item name="android:duplicateParentState">true</item>
+    </style>
+    <style name="HomeTileLabel">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">3dp</item>
+        <item name="android:textColor">#FFFFFFFF</item>
+        <item name="android:textSize">9.5sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.06</item>
+        <item name="android:singleLine">true</item>
+    </style>
+    <style name="HomeCircle">
+        <item name="android:layout_width">150dp</item>
+        <item name="android:layout_height">150dp</item>
+        <item name="android:background">@drawable/home_circle</item>
+        <item name="android:focusable">true</item>
+        <item name="android:clickable">true</item>
+        <item name="android:gravity">center</item>
+        <item name="android:orientation">vertical</item>
+    </style>
+    <style name="HomeCircleText">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">6dp</item>
+        <item name="android:gravity">center</item>
+        <item name="android:textColor">#FFFFFFFF</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:fontFamily">sans-serif-condensed</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.08</item>
+        <item name="android:lineSpacingExtra">1dp</item>
+    </style>
 </resources>

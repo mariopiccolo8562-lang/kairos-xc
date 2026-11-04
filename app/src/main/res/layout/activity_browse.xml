@@ -29,7 +29,6 @@
         <TextView android:id="@+id/tabLive" style="@style/Tab" android:text="Live TV" />
         <TextView android:id="@+id/tabFilm" style="@style/Tab" android:text="Film" />
         <TextView android:id="@+id/tabSeries" style="@style/Tab" android:text="Serie TV" />
-        <TextView android:id="@+id/tabCatchup" style="@style/Tab" android:text="Catchup" />
         <View android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" />
         <TextView
             android:id="@+id/clock"

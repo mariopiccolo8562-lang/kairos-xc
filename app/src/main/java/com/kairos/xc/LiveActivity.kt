@@ -109,7 +109,7 @@ class LiveActivity : BaseActivity() {
         channels.fast()
         channels.adapter = chAdapter
 
-        curCat = Store.lastLiveCat.ifEmpty { Db.ALL }
+        curCat = intent.getStringExtra("cat") ?: Store.lastLiveCat.ifEmpty { Db.ALL }
         restoreId = Store.lastLiveId
         favSet = Store.favs("live")
         Sync.listen(syncL)

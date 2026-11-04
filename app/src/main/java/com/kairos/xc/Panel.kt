@@ -38,17 +38,6 @@ class Playlist(
     fun movieUrl(sid: String, ext: String): String? = xt?.let { "${it.first}/movie/${enc(it.second)}/${enc(it.third)}/$sid.${ext.ifEmpty { "mp4" }}" }
     fun episodeUrl(id: String, ext: String): String? = xt?.let { "${it.first}/series/${enc(it.second)}/${enc(it.third)}/$id.${ext.ifEmpty { "mp4" }}" }
 
-    /**
-     * Catchup (Xtream): programma passato registrato dal server.
-     * [start] è l'ora di inizio nel fuso del server, «yyyy-MM-dd HH:mm…» (come arriva dalla guida), [minutes] la durata.
-     */
-    fun timeshiftUrl(sid: String, start: String, minutes: Int): String? {
-        val x = xt ?: return null
-        if (sid.isEmpty() || start.length < 16) return null
-        val t = start.substring(0, 10) + ":" + start.substring(11, 13) + "-" + start.substring(14, 16)
-        return "${x.first}/timeshift/${enc(x.second)}/${enc(x.third)}/${minutes.coerceIn(1, 600)}/$t/$sid.ts"
-    }
-
     fun origin(): String = try { origin(URL(fixUrl(if (isXtream) host else url))) } catch (_: Exception) { "" }
 
     /** firma senza il server: se il pannello cambia DNS la lista non si ricarica da capo */
@@ -308,26 +297,26 @@ object K {
 
     fun pl(id: String): Playlist? = playlists().find { it.id == id }
 
-    /** playlist da mostrare: quella del profilo, oppure (modalità «separate») quella scelta, oppure tutte unite */
+    /**
+     * Portale in uso (come i portali di MirkoTeam): Kairos XC usa sempre UNA playlist alla volta,
+     * più leggero che unirle tutte. Ordine: quella del profilo, quella scelta in «Account», la predefinita del pannello, la prima.
+     */
     fun active(): List<Playlist> {
         val all = playlists()
         if (all.isEmpty()) return all
         val pr = profile()
         if (pr != null && pr.pl != "all") all.find { it.id == pr.pl }?.let { return listOf(it) }
         val acc = Panel.state?.account
-        if (acc != null && acc.plMode == "split") {
-            val c = Store.plChoice.takeIf { ch -> all.any { it.id == ch } }
-                ?: acc.plDefault.takeIf { d -> all.any { it.id == d } } ?: all[0].id
-            return all.filter { it.id == c }
-        }
-        return all
+        val c = Store.plChoice.takeIf { ch -> canSwitchPl() && all.any { it.id == ch } }
+            ?: acc?.plDefault?.takeIf { d -> all.any { it.id == d } } ?: all[0].id
+        return all.filter { it.id == c }
     }
 
     fun activeIds(): List<String> = active().map { it.id }
 
     fun canSwitchPl(): Boolean {
         val s = Panel.state ?: return false
-        return s.perm("plSwitch") && s.account?.plMode == "split" && playlists().size > 1 && (profile()?.pl ?: "all") == "all"
+        return s.perm("plSwitch") && playlists().size > 1 && (profile()?.pl ?: "all") == "all"
     }
 
     fun profilesOn(): Boolean {

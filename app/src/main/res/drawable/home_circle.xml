@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- cerchi della Home: anello sfumato arancio→magenta→viola; selezionato pieno con anello bianco -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_focused="true"><layer-list>
+        <item><shape android:shape="oval"><gradient android:angle="315" android:startColor="#F2FF6A1F" android:centerColor="#F2FF2D6F" android:endColor="#F28B5CF6" /></shape></item>
+        <item><shape android:shape="ring" android:innerRadiusRatio="2.2" android:thicknessRatio="22" android:useLevel="false"><solid android:color="#FFFFFFFF" /></shape></item>
+    </layer-list></item>
+    <item android:state_pressed="true"><layer-list>
+        <item><shape android:shape="oval"><gradient android:angle="315" android:startColor="#F2FF6A1F" android:centerColor="#F2FF2D6F" android:endColor="#F28B5CF6" /></shape></item>
+    </layer-list></item>
+    <item><layer-list>
+        <item><shape android:shape="oval"><solid android:color="#B30B0912" /></shape></item>
+        <item><shape android:shape="ring" android:innerRadiusRatio="2.12" android:thicknessRatio="34" android:useLevel="false">
+            <gradient android:type="sweep" android:startColor="#FFFFC233" android:centerColor="#FFFF2D6F" android:endColor="#FF8B5CF6" android:useLevel="false" />
+        </shape></item>
+    </layer-list></item>
+</selector>

@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Home di Kairos XC: stessa struttura di MirkoTeam (logo e icone in alto, tre cerchi al centro, Account/Preferiti e Impostazioni in basso),
+     grafica futuristica arancio/magenta/viola. Lo sfondo è una sola immagine piccola (960x540): leggera anche sulle chiavette. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg">
+
+    <ImageView
+        android:id="@+id/bg"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        android:src="@drawable/home_bg" />
+
+    <!-- in alto -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top"
+        android:paddingLeft="@dimen/home_pad"
+        android:paddingTop="@dimen/home_pad_v"
+        android:paddingRight="@dimen/home_pad">
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="@dimen/home_tile"
+            android:layout_gravity="left|center_vertical"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+            <ImageView
+                android:layout_width="52dp"
+                android:layout_height="52dp"
+                android:src="@drawable/ic_logo" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="10dp"
+                android:fontFamily="sans-serif-condensed"
+                android:text="Kairos"
+                android:textColor="#FFFFFFFF"
+                android:textSize="24sp"
+                android:textStyle="bold" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="6dp"
+                android:fontFamily="sans-serif-condensed"
+                android:letterSpacing="0.12"
+                android:text="XC"
+                android:textColor="@color/accent"
+                android:textSize="24sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="@dimen/home_tile"
+            android:layout_gravity="center_horizontal"
+            android:gravity="center"
+            android:orientation="vertical">
+            <TextView
+                android:id="@+id/portal"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="sans-serif-condensed"
+                android:letterSpacing="0.14"
+                android:maxWidth="260dp"
+                android:singleLine="true"
+                android:ellipsize="end"
+                android:textColor="#FFFFFFFF"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+            <TextView
+                android:id="@+id/portalSub"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:singleLine="true"
+                android:textColor="#B3FFFFFF"
+                android:textSize="11sp" />
+        </LinearLayout>
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="right|center_vertical"
+            android:orientation="horizontal">
+            <LinearLayout android:id="@+id/search" style="@style/HomeTile" android:layout_marginLeft="0dp" android:contentDescription="CERCA">
+                <ImageView style="@style/HomeTileIcon" android:src="@drawable/hi_search" />
+                <TextView style="@style/HomeTileLabel" android:text="CERCA" />
+            </LinearLayout>
+            <LinearLayout android:id="@+id/vpn" style="@style/HomeTile" android:contentDescription="VPN">
+                <ImageView style="@style/HomeTileIcon" android:src="@drawable/hi_vpn" />
+                <TextView style="@style/HomeTileLabel" android:text="VPN" />
+            </LinearLayout>
+            <FrameLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content">
+            <LinearLayout android:id="@+id/msg" style="@style/HomeTile" android:contentDescription="MSG">
+                <ImageView style="@style/HomeTileIcon" android:src="@drawable/hi_msg" />
+                <TextView style="@style/HomeTileLabel" android:text="MSG" />
+            </LinearLayout>
+                <View
+                    android:id="@+id/msgDot"
+                    android:layout_width="10dp"
+                    android:layout_height="10dp"
+                    android:layout_gravity="top|right"
+                    android:layout_margin="5dp"
+                    android:background="@drawable/dot_accent"
+                    android:visibility="gone" />
+            </FrameLayout>
+            <LinearLayout android:id="@+id/update" style="@style/HomeTile" android:contentDescription="UPDATE">
+                <ImageView style="@style/HomeTileIcon" android:src="@drawable/hi_update" />
+                <TextView style="@style/HomeTileLabel" android:text="UPDATE" />
+            </LinearLayout>
+        </LinearLayout>
+    </FrameLayout>
+
+    <!-- i tre cerchi -->
+    <LinearLayout
+        android:id="@+id/circles"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:gravity="center"
+        android:orientation="horizontal">
+        <LinearLayout android:id="@+id/live" style="@style/HomeCircle">
+            <ImageView android:id="@+id/liveIcon" android:layout_width="44dp" android:layout_height="44dp" android:duplicateParentState="true" android:src="@drawable/hi_live" />
+            <TextView style="@style/HomeCircleText" android:text="DIRETTA&#10;LIVE TV" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/film" style="@style/HomeCircle" android:layout_marginLeft="@dimen/home_gap">
+            <ImageView android:id="@+id/filmIcon" android:layout_width="44dp" android:layout_height="44dp" android:duplicateParentState="true" android:src="@drawable/hi_film" />
+            <TextView style="@style/HomeCircleText" android:text="FILM&#10;ON DEMAND" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/series" style="@style/HomeCircle" android:layout_marginLeft="@dimen/home_gap">
+            <ImageView android:id="@+id/seriesIcon" android:layout_width="44dp" android:layout_height="44dp" android:duplicateParentState="true" android:src="@drawable/hi_series" />
+            <TextView style="@style/HomeCircleText" android:text="SERIE&#10;TV" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- in basso -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:paddingLeft="@dimen/home_pad"
+        android:paddingRight="@dimen/home_pad"
+        android:paddingBottom="@dimen/home_pad_v">
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="left|bottom"
+            android:orientation="horizontal">
+            <LinearLayout android:id="@+id/account" style="@style/HomeTile" android:layout_marginLeft="0dp" android:contentDescription="ACCOUNT">
+                <ImageView style="@style/HomeTileIcon" android:src="@drawable/hi_account" />
+                <TextView style="@style/HomeTileLabel" android:text="ACCOUNT" />
+            </LinearLayout>
+            <LinearLayout android:id="@+id/favorite" style="@style/HomeTile" android:contentDescription="FAVORITE">
+                <ImageView style="@style/HomeTileIcon" android:src="@drawable/hi_star" />
+                <TextView style="@style/HomeTileLabel" android:text="FAVORITE" />
+            </LinearLayout>
+        </LinearLayout>
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="@dimen/home_tile"
+            android:layout_gravity="center_horizontal|bottom"
+            android:gravity="center"
+            android:orientation="vertical">
+            <TextView
+                android:id="@+id/clock"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="sans-serif-condensed"
+                android:letterSpacing="0.1"
+                android:textColor="#FFFFFFFF"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+            <TextView
+                android:id="@+id/sync"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:singleLine="true"
+                android:textColor="#CCFFFFFF"
+                android:textSize="11sp"
+                android:visibility="gone" />
+        </LinearLayout>
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="right|bottom"
+            android:orientation="horizontal">
+            <LinearLayout android:id="@+id/settings" style="@style/HomeTile" android:layout_marginLeft="0dp" android:contentDescription="SETTINGS">
+                <ImageView style="@style/HomeTileIcon" android:src="@drawable/hi_settings" />
+                <TextView style="@style/HomeTileLabel" android:text="SETTINGS" />
+            </LinearLayout>
+        </LinearLayout>
+    </FrameLayout>
+</FrameLayout>

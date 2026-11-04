@@ -75,12 +75,25 @@ object Store {
     var plChoice: String
         get() = s("plChoice")
         set(v) = put("plChoice", v)
-    var syncSig: String
-        get() = s("syncSig")
-        set(v) = put("syncSig", v)
-    var syncAt: Long
-        get() = p.getLong("syncAt", 0)
-        set(v) = p.edit().putLong("syncAt", v).apply()
+    /** portale usato prima di quello attuale: le sue liste restano sul disco, per tornarci al volo */
+    var plPrev: String
+        get() = s("plPrev")
+        set(v) = put("plPrev", v)
+    /* liste scaricate PER PORTALE: tornando a un portale già usato le liste sono subito pronte */
+    private fun syncKey(ids: List<String>) = ids.joinToString(",")
+    fun syncSigOf(ids: List<String>): String = s("syncSig:" + syncKey(ids))
+    fun syncAtOf(ids: List<String>): Long = p.getLong("syncAt:" + syncKey(ids), 0)
+    fun setSynced(ids: List<String>, sig: String, at: Long) {
+        p.edit().putString("syncSig:" + syncKey(ids), sig).putLong("syncAt:" + syncKey(ids), at).apply()
+    }
+    /** ultimo aggiornamento delle liste del portale in uso */
+    val syncAt: Long get() = syncAtOf(K.activeIds())
+    /** archivio nuovo: tutte le liste si ricaricano */
+    fun clearSync() {
+        val e = p.edit()
+        p.all.keys.filter { it.startsWith("syncSig") || it.startsWith("syncAt") }.forEach { e.remove(it) }
+        e.apply()
+    }
     var kickSeen: Long
         get() = p.getLong("kickSeen", 0)
         set(v) = p.edit().putLong("kickSeen", v).apply()

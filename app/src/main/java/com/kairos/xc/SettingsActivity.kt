@@ -76,7 +76,7 @@ class SettingsActivity : BaseActivity() {
         }
         if (K.canSwitchPl()) {
             val cur = K.active().firstOrNull()
-            row(R.drawable.ic_layers, "Playlist", "Scegli quale lista usare", cur?.name ?: "") { choosePl() }
+            row(R.drawable.ic_layers, "Portale", "Scegli il server da usare", cur?.name ?: "") { choosePl() }
         }
         if (s.vpnMode != "off" && s.vpnConf.isNotEmpty()) {
             if (s.vpnMode == "force") row(R.drawable.ic_shield, "VPN", KxVpn.message.ifEmpty { "Attivata dal tuo fornitore" }, "Sempre attiva", null)
@@ -132,9 +132,11 @@ class SettingsActivity : BaseActivity() {
     private fun choosePl() {
         val all = K.playlists()
         val cur = K.active().firstOrNull()?.id
-        Ui.choose(this, "Playlist", all.map { it.name }.toTypedArray(), all.indexOfFirst { it.id == cur }) { i ->
+        Ui.choose(this, "Portale", all.map { it.name }.toTypedArray(), all.indexOfFirst { it.id == cur }) { i ->
+            if (all[i].id == cur) return@choose
+            if (cur != null) Store.plPrev = cur
             Store.plChoice = all[i].id
-            Sync.force()
+            Sync.start() // si scarica solo se le liste di quel portale non ci sono già
             build()
         }
     }
