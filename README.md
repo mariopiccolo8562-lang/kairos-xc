@@ -11,7 +11,7 @@ Pacchetto `com.kairos.xc`: si installa **accanto** a Kairos Pro, Kairos TV e Kai
 |---|---|---|
 | Lettori video | 3 (VLC, FFmpeg, ExoPlayer) | 1 (ExoPlayer) |
 | VPN | OpenVPN (librerie native pesanti) | WireGuard dal pannello |
-| Dimensione APK | ~97 MB | circa 10 MB (stima, solo ARM) |
+| Dimensione APK | ~97 MB | circa 4-5 MB |
 | Avvio | attese fisse di 2-5 secondi | nessuna attesa: logo immediato, Home già pronta |
 | Liste | in memoria | su disco (SQLite), letta solo la parte visibile |
 
