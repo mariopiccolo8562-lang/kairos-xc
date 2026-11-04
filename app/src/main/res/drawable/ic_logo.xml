@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- logo Kairos XC: X e C arancioni con il tasto play (stesso disegno dell'icona, colori pieni: va bene anche su Android 5) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="40dp" android:height="40dp" android:viewportWidth="512" android:viewportHeight="512">
+    <path android:strokeColor="#FFA726" android:strokeWidth="54" android:strokeLineCap="round" android:pathData="M112,160 L232,352 M232,160 L112,352" />
+    <path android:strokeColor="#FF5A2A" android:strokeWidth="50" android:strokeLineCap="round" android:pathData="M418,196 A98,98 0 1,0 418,316" />
+    <path android:fillColor="#FFFFFF" android:strokeColor="#FFFFFF" android:strokeWidth="10" android:strokeLineJoin="round" android:pathData="M322,220 L322,292 L380,256 Z" />
+</vector>

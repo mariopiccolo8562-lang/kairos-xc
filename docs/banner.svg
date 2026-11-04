@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
+<defs>
+<linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFC233"/><stop offset=".5" stop-color="#FF6A1F"/><stop offset="1" stop-color="#FF2D6F"/></linearGradient>
+<radialGradient id="bg" cx=".3" cy=".45" r=".9"><stop offset="0" stop-color="#2A1630"/><stop offset=".6" stop-color="#140A18"/><stop offset="1" stop-color="#08050A"/></radialGradient>
+</defs>
+<rect width="640" height="360" fill="url(#bg)"/>
+<g transform="translate(40 76) scale(0.4)">
+<path d="M112 160 L232 352 M232 160 L112 352" stroke="url(#g)" stroke-width="54" stroke-linecap="round" fill="none"/>
+<path d="M418 196 A98 98 0 1 0 418 316" stroke="url(#g)" stroke-width="50" stroke-linecap="round" fill="none"/>
+<path d="M322 220 L322 292 L380 256 Z" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="10" stroke-linejoin="round"/>
+</g>
+<text x="250" y="200" font-family="DejaVu Sans, Arial, sans-serif" font-weight="bold" font-size="76" fill="#FFFFFF">Kairos</text>
+<text x="252" y="262" font-family="DejaVu Sans, Arial, sans-serif" font-weight="bold" font-size="56" fill="url(#g)" letter-spacing="6">XC</text>
+</svg>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- schermata di avvio disegnata dal sistema (zero codice): compare nello stesso istante in cui si preme l'icona -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android" android:opacity="opaque">
+    <item android:drawable="@color/bg" />
+    <item android:gravity="center" android:drawable="@drawable/ic_logo_big" />
+</layer-list>

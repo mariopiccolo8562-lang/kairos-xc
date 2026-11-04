@@ -1,0 +1,10 @@
+# segreti: non vanno MAI nel repository
+*.jks
+*.keystore
+.env
+# build
+.gradle/
+build/
+app/build/
+local.properties
+.DS_Store

@@ -1,0 +1,10 @@
+# Profilo di avvio (Baseline Profile): queste classi vengono compilate in codice macchina già
+# all'installazione, così l'app non parte «a freddo» interpretando il codice.
+# Kairos XC intera (è piccola) + le librerie usate dalla Home e dalle liste.
+HSPLcom/kairos/xc/**;->**(**)**
+Lcom/kairos/xc/**;
+HSPLandroidx/recyclerview/widget/**;->**(**)**
+Landroidx/recyclerview/widget/**;
+HSPLcom/bumptech/glide/**;->**(**)**
+Lcom/bumptech/glide/**;
+HSPLandroidx/core/**;->**(**)**
