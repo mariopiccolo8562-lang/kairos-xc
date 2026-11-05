@@ -131,6 +131,11 @@ class LiveActivity : BaseActivity() {
         stopVideo()
     }
 
+    override fun onStop() {
+        super.onStop()
+        releaseVideo() // lettore dell'anteprima liberato: si ricrea al prossimo OK
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         Sync.unlisten(syncL)
@@ -312,12 +317,13 @@ class LiveActivity : BaseActivity() {
         val my = ++videoSeq
         pspin.visibility = View.VISIBLE
         hint(key() + " · schermo intero")
-        bg {
+        net {
             Vpns.awaitForced() // VPN «sempre attiva»: anche l'anteprima passa dalla VPN
+            if (my != videoSeq) return@net // nel frattempo si è passati a un altro canale
             // limite di visioni contemporanee del pannello: l'anteprima è una visione come le altre
             val block = Panel.stream("live", r.s("name"))
             ui {
-                if (isFinishing || my != videoSeq || previewId != id) return@ui
+                if (isFinishing || my != videoSeq || previewK != r.s("k")) return@ui
                 if (block != null) { previewId = 0; pspin.visibility = View.GONE; idleHint(); Ui.toast(block); return@ui }
                 val p = player ?: Players.build(this, true, preview = true).also { pl ->
                     player = pl
@@ -342,6 +348,7 @@ class LiveActivity : BaseActivity() {
                     })
                 }
                 pview?.visibility = View.VISIBLE
+                Pulse.watch(Pulse.Watch("live", "", r.s("name"), r.s("k"), "", r.s("pl")))
                 p.setMediaItem(Players.item(url))
                 p.prepare()
                 p.playWhenReady = true
@@ -351,6 +358,7 @@ class LiveActivity : BaseActivity() {
 
     private fun stopVideo() {
         videoSeq++
+        if (previewId != 0L) Pulse.watch(null)
         previewId = 0
         player?.let { try { it.stop(); it.clearMediaItems() } catch (_: Exception) {} }
         pview?.visibility = View.INVISIBLE

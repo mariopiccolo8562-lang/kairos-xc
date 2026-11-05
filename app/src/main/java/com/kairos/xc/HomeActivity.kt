@@ -52,9 +52,9 @@ class HomeActivity : BaseActivity() {
     /** cerchi grandi quanto lo schermo permette (TV, chiavette e telefoni in orizzontale) */
     private fun sizeCircles() {
         val dm = resources.displayMetrics
-        // diametro del cerchio visibile; l'immagine è più grande perché contiene anche l'alone (cerchio = 82%)
+        // diametro del cerchio visibile; l'immagine è più grande perché contiene anche l'alone (cerchio = 80%)
         val vis = minOf(dm.heightPixels * 0.38f, dm.widthPixels * 0.2f)
-        val size = (vis / 0.82f).toInt()
+        val size = (vis / 0.80f).toInt()
         val gap = 0
         for ((i, id) in listOf(R.id.live, R.id.film, R.id.series).withIndex()) {
             val v = findViewById<View>(id)

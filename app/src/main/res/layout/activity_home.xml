@@ -36,6 +36,9 @@
                 android:layout_marginLeft="10dp"
                 android:fontFamily="@font/poppins"
                 android:text="Kairos"
+                android:shadowColor="#99000000"
+                android:shadowDy="2"
+                android:shadowRadius="6"
                 android:textColor="#FFFFFFFF"
                 android:textSize="24sp"
                 android:textStyle="bold" />
@@ -46,6 +49,8 @@
                 android:fontFamily="@font/poppins"
                 android:letterSpacing="0.08"
                 android:text="XC"
+                android:shadowColor="#CCFF6A1F"
+                android:shadowRadius="14"
                 android:textColor="@color/accent"
                 android:textSize="24sp"
                 android:textStyle="bold" />
@@ -58,6 +63,8 @@
             android:orientation="vertical">
             <TextView
                 android:id="@+id/portal"
+                android:shadowColor="#99FF2D6F"
+                android:shadowRadius="12"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:fontFamily="@font/poppins"

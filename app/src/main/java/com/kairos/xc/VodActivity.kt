@@ -83,7 +83,14 @@ class VodActivity : BaseActivity() {
                 App.main.postDelayed(loadR, 450)
             }
         })
-        query.setOnEditorActionListener { _, _, _ -> grid.requestFocus(); false }
+        query.setOnEditorActionListener { v, _, _ ->
+            // «Cerca» sulla tastiera: si chiude e si va ai risultati (se ce ne sono)
+            (getSystemService(INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager)?.hideSoftInputFromWindow(v.windowToken, 0)
+            App.main.removeCallbacks(loadR)
+            pendingCat = catAdapter.items.getOrNull(catAdapter.selected)
+            load(focus = true)
+            true
+        }
         favSet = Store.favs(table)
         verWas = Sync.ver(table)
         Sync.listen(syncL)
@@ -99,7 +106,10 @@ class VodActivity : BaseActivity() {
         when {
             // portale o profilo cambiati nel frattempo
             loadedSig.isNotEmpty() && sig() != loadedSig -> loadCats(refresh = true)
-            loadedSig.isNotEmpty() && (recentKeys().size != (catAdapter.items.find { it.id == Db.REC }?.count ?: 0) || curCat == Db.REC) -> loadCats(refresh = true)
+            // categorie non ancora caricate (prima apertura): niente da aggiornare
+            catAdapter.items.isEmpty() -> {}
+            recentKeys().size != (catAdapter.items.find { it.id == Db.REC }?.count ?: 0) -> loadCats(refresh = true)
+            curCat == Db.REC -> { pendingCat = catAdapter.items.find { it.id == Db.REC }; load(keep = true) }
             // tolto/aggiunto un preferito dalla scheda: la griglia Preferiti e il conteggio si aggiornano
             before != favSet -> {
                 catAdapter.items.find { it.id == Db.FAV }?.let { it.count = Store.favsIn(table, K.activeIds()).size; catAdapter.notifyItemChanged(1) }
@@ -172,10 +182,13 @@ class VodActivity : BaseActivity() {
     }
 
     /** «Continua a guardare»: film (o serie) iniziati, dal più recente; per le serie la serie intera */
-    private fun recentKeys(): List<String> = Store.recent().mapNotNull {
-        if (table == "series") it.optString("group").takeIf { g -> it.optString("kind") == "series" && g.isNotEmpty() }
-        else it.optString("id").takeIf { _ -> it.optString("kind", "movie") == "movie" }
-    }.distinct()
+    private fun recentKeys(): List<String> {
+        val pls = K.activeIds()
+        return Store.recent().mapNotNull {
+            if (table == "series") it.optString("group").takeIf { g -> it.optString("kind") == "series" && g.isNotEmpty() }
+            else it.optString("id").takeIf { _ -> it.optString("kind", "movie") == "movie" }
+        }.filter { k -> pls.any { k.startsWith("$it:") } }.distinct() // solo il portale in uso
+    }
 
     private fun focusCats() = cats.focusAt(catAdapter.selected)
     private fun focusGrid() = grid.focusVisible()
@@ -184,7 +197,7 @@ class VodActivity : BaseActivity() {
         val c = posters.cursor ?: return
         if (pos < 0 || c.isClosed) return
         val (id, k) = try { if (!c.moveToPosition(pos)) return; c.getLong(0) to (c.getString(1) ?: "") } catch (_: Exception) { return }
-        open(DetailActivity::class.java) { putExtra("table", table); putExtra("id", id); putExtra("k", k) }
+        open(DetailActivity::class.java) { putExtra("table", table); putExtra("id", id); putExtra("k", k); if (curCat == Db.REC) putExtra("autoplay", true) }
     }
 
     private fun toggleFav(pos: Int) {
@@ -194,7 +207,7 @@ class VodActivity : BaseActivity() {
         favSet = Store.favs(table)
         Ui.toast(if (on) "Aggiunto ai preferiti" else "Tolto dai preferiti")
         catAdapter.items.find { it.id == Db.FAV }?.let { it.count = Store.favsIn(table, K.activeIds()).size; catAdapter.notifyItemChanged(1) }
-        if (curCat == Db.FAV) { pendingCat = catAdapter.items.find { it.id == Db.FAV }; load() }
+        if (curCat == Db.FAV) { pendingCat = catAdapter.items.find { it.id == Db.FAV }; load(keep = true) }
     }
 
     private inner class PosterAdapter : CursorAdapter<PosterAdapter.H>() {

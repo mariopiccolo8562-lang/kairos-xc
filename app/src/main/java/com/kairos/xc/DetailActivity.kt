@@ -76,7 +76,7 @@ class DetailActivity : BaseActivity() {
                 poster = r.s("img")
                 fillBasic(r)
                 loadInfo(r)
-                // «Riproduci» dal riquadro grande della Home: il film parte subito
+                // da «Continua a guardare»: il film riparte subito da dove era rimasto
                 if (table == "vod" && intent.getBooleanExtra("autoplay", false)) { intent.removeExtra("autoplay"); play(false) }
             }
         }

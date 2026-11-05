@@ -65,7 +65,7 @@ def background(W, H, calm):
     v = np.clip(1 - (np.hypot((xx - W / 2) / W, (yy - H / 2) / H) * 1.05) ** 2.2, .35, 1)
     img *= v[..., None]
     if calm:
-        img = blur(img, W / 320) * .78   # schermate interne: più scuro e calmo, si leggono bene i testi
+        img = blur(img, W / 320) * .86   # schermate interne: più scuro e calmo, si leggono bene i testi
     # un pizzico di grana per evitare le «bande» sulle TV
     img += np.random.default_rng(3).normal(0, 1.6, img.shape)
     return Image.fromarray(np.clip(img, 0, 255).astype(np.uint8))
@@ -111,7 +111,83 @@ def circle(S, focused):
     rgba[..., 3] = np.clip(a, 0, 1) * 255
     return Image.fromarray(rgba.astype(np.uint8), "RGBA")
 
-background(1280, 720, False).save(os.path.join(OUT, "home_bg.jpg"), "JPEG", quality=86, optimize=True)
+
+def circle3d(S, focused):
+    """Cerchio in rilievo: ombra sotto, bordo smussato illuminato dall'alto, cupola lucida, riflesso in alto."""
+    yy, xx = np.mgrid[0:S, 0:S].astype(float)
+    c = S / 2
+    R = S * .40
+    cy = c - S * .012
+    dx, dy = (xx - c) / R, (yy - cy) / R
+    r = np.hypot(dx, dy)
+    rgba = np.zeros((S, S, 4))
+    # ombra morbida sotto (dà lo stacco dal fondo)
+    sh = (np.hypot((xx - c) / (R * 1.0), (yy - (cy + S * .05)) / (R * .98)) < 1).astype(float) * 255
+    sh = blur(np.repeat(sh[..., None], 3, 2), S * .035)[..., 0] / 255 * .75
+    # alone coi colori del logo (più forte se selezionato)
+    gl = (r < 1.02).astype(float) * 255
+    gl = blur(np.repeat(gl[..., None], 3, 2), S * (.06 if focused else .03))[..., 0] / 255
+    diag = np.clip((xx + yy) / (2 * S), 0, 1)
+    gcol = logo_grad(diag)
+    glow_a = gl * (0.95 if focused else 0.35) * (r > .98)
+    # luce: dall'alto a sinistra
+    nz = np.sqrt(np.clip(1 - r ** 2, 0, 1))
+    light = np.clip(.55 + .55 * (-dx * .35 - dy * .6 + nz * .7), .25, 1.35)
+    rim_w = .075
+    rim = (r <= 1) & (r > 1 - rim_w)
+    face = r <= 1 - rim_w
+    aa = np.clip((1 - r) * R, 0, 1)  # bordo senza scalini
+    # bordo smussato: anello sfumato del logo, più chiaro in alto
+    bevel = np.clip(.45 + .9 * (-dy * .8 - dx * .3), .25, 1.5)
+    if focused:
+        rim_col = (gcol * .55 + 255 * .45) * bevel[..., None]
+        base = logo_grad(np.clip(diag * 1.5 - .2, 0, 1))
+        face_col = base * light[..., None]
+    else:
+        rim_col = gcol * bevel[..., None]
+        base = np.array([46, 20, 42.])
+        face_col = base * (light ** 1.2)[..., None]
+    # riflesso lucido in alto (vetro)
+    spec = np.clip(1 - np.hypot(dx / .62, (dy + .48) / .32), 0, 1) ** 1.6 * (.55 if focused else .30)
+    # ombra interna sotto il bordo
+    inner = np.clip(1 - (1 - rim_w - r) / .12, 0, 1) * face * .35
+    face_col = face_col * (1 - inner[..., None]) + 255 * spec[..., None]
+    rgb = np.zeros((S, S, 3))
+    rgb[face] = face_col[face]
+    rgb[rim] = rim_col[rim]
+    a_shape = np.where(r <= 1, aa, 0)
+    # composizione dal basso: ombra, alone, cerchio
+    def over(top_rgb, top_a, bot_rgb, bot_a):
+        oa = top_a + bot_a * (1 - top_a)
+        orgb = (top_rgb * top_a[..., None] + bot_rgb * (bot_a * (1 - top_a))[..., None]) / np.maximum(oa, 1e-6)[..., None]
+        return orgb, oa
+    sh_a = sh * (.35 if focused else 1.0)
+    c_rgb, c_a = over(gcol, np.clip(glow_a, 0, 1), np.zeros((S, S, 3)), sh_a)
+    c_rgb, c_a = over(rgb, a_shape, c_rgb, c_a)
+    rgba[..., :3] = np.clip(c_rgb, 0, 255)
+    rgba[..., 3] = np.clip(c_a, 0, 1) * 255
+    return Image.fromarray(rgba.astype(np.uint8), "RGBA")
+
+def stage(img):
+    """Home: raggi di luce dal centro, faretto dietro i cerchi e linea d'orizzonte luminosa (più impatto)."""
+    a = np.asarray(img).astype(float)
+    H, W = a.shape[:2]
+    yy, xx = np.mgrid[0:H, 0:W].astype(float)
+    cx, cy = W * .5, H * .47
+    ang = np.arctan2(yy - cy, xx - cx)
+    d = np.hypot((xx - cx) / W, (yy - cy) / H)
+    rays = (np.cos(ang * 14) * .5 + .5) ** 6 * np.clip(1 - d * 1.5, 0, 1) ** 1.5
+    rays = blur(np.repeat(rays[..., None] * 255, 3, 2), W / 260)[..., 0] / 255
+    spot = np.exp(-(((xx - cx) / (W * .34)) ** 2 + ((yy - cy) / (H * .30)) ** 2) * 1.6)
+    hor_y = H * .80
+    hor = np.exp(-((yy - hor_y) / (H * .012)) ** 2) * np.clip(1 - np.abs(xx - cx) / (W * .55), 0, 1) ** 1.2
+    hor_glow = np.exp(-((yy - hor_y) / (H * .07)) ** 2) * np.clip(1 - np.abs(xx - cx) / (W * .6), 0, 1)
+    col_c = logo_grad(np.clip(xx / W, 0, 1))
+    a = a + (rays * 70)[..., None] * (O / 255) + (spot * 38)[..., None] * (P / 255 * .6 + O / 255 * .4)
+    a = a + col_c * (hor * .95)[..., None] + col_c * (hor_glow * .30)[..., None]
+    return Image.fromarray(np.clip(a, 0, 255).astype(np.uint8))
+
+stage(background(1280, 720, False)).save(os.path.join(OUT, "home_bg.jpg"), "JPEG", quality=86, optimize=True)
 background(960, 540, True).save(os.path.join(OUT, "app_bg.jpg"), "JPEG", quality=82, optimize=True)
-circle(320, False).save(os.path.join(OUT, "circle_n.png"), optimize=True)
-circle(320, True).save(os.path.join(OUT, "circle_f.png"), optimize=True)
+circle3d(360, False).save(os.path.join(OUT, "circle_n.png"), optimize=True)
+circle3d(360, True).save(os.path.join(OUT, "circle_f.png"), optimize=True)

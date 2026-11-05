@@ -61,5 +61,5 @@ Per ora l'app si presenta al pannello come Kairos TV (stesse funzioni) e si dist
 | `app/src/main/java/com/kairos/xc/` | `HomeActivity` (Home a cerchi, portali), `VodActivity` (Film/Serie a griglia), `LiveActivity`, `DetailActivity`, `PlayerActivity`, `Sync`/`Db` (liste su disco, per portale), `Panel` (pannello Kairos) |
 | `app/src/main/res/` | Grafica: colori, layout, logo |
 | `app/src/main/baseline-prof.txt` | Profilo di avvio |
-| `docs/` | Logo e banner (SVG e PNG), `src/grafica.py` per rigenerare sfondi e cerchi |
+| `docs/` | Logo e banner (SVG e PNG), `src/grafica.py` (sfondi e cerchi 3D) e `src/pulsanti.py` (pulsanti in rilievo) |
 | `.github/workflows/` | Compilazione e pubblicazione, preparazione dei segreti |
