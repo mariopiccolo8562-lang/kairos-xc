@@ -51,8 +51,10 @@ class HomeActivity : BaseActivity() {
     /** cerchi grandi quanto lo schermo permette (TV, chiavette e telefoni in orizzontale) */
     private fun sizeCircles() {
         val dm = resources.displayMetrics
-        val size = minOf(dm.heightPixels * 0.38f, dm.widthPixels * 0.2f).toInt()
-        val gap = (size * 0.2f).toInt()
+        // diametro del cerchio visibile; l'immagine è più grande perché contiene anche l'alone (cerchio = 82%)
+        val vis = minOf(dm.heightPixels * 0.38f, dm.widthPixels * 0.2f)
+        val size = (vis / 0.82f).toInt()
+        val gap = 0
         for ((i, id) in listOf(R.id.live, R.id.film, R.id.series).withIndex()) {
             val v = findViewById<View>(id)
             val lp = v.layoutParams as android.widget.LinearLayout.LayoutParams
@@ -61,8 +63,8 @@ class HomeActivity : BaseActivity() {
             lp.leftMargin = if (i == 0) 0 else gap
             v.layoutParams = lp
             val icon = findViewById<View>(when (id) { R.id.live -> R.id.liveIcon; R.id.film -> R.id.filmIcon; else -> R.id.seriesIcon })
-            icon.layoutParams.width = (size * 0.27f).toInt()
-            icon.layoutParams.height = (size * 0.27f).toInt()
+            icon.layoutParams.width = (vis * 0.26f).toInt()
+            icon.layoutParams.height = (vis * 0.26f).toInt()
         }
     }
 

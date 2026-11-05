@@ -66,14 +66,14 @@ object Snap {
 
     /** la Home appena ricostruita è uguale a quella già sullo schermo? (allora non si tocca niente) */
     fun same(shown: List<BrowseActivity.Row>, heroShown: Db.Card?, fresh: List<BrowseActivity.Row>, heroFresh: Db.Card?): Boolean {
-        if ((heroShown?.k ?: "") != (heroFresh?.k ?: "") || shown.size != fresh.size) return false
+        if ((heroShown?.k ?: "") != (heroFresh?.k ?: "") || (heroShown?.id ?: 0L) != (heroFresh?.id ?: 0L) || shown.size != fresh.size) return false
         for (i in shown.indices) {
             val a = shown[i]
             val b = fresh[i]
             if (a.key != b.key || a.title != b.title || a.count != b.count) return false
             val ca = a.cards
             val cb = b.cards
-            if (ca != null && cb != null && (ca.size != cb.size || ca.indices.any { ca[it].k != cb[it].k || ca[it].img != cb[it].img })) return false
+            if (ca != null && cb != null && (ca.size != cb.size || ca.indices.any { ca[it].k != cb[it].k || ca[it].id != cb[it].id || ca[it].img != cb[it].img })) return false
         }
         return true
     }

@@ -1,19 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Kairos XC: fondo quasi nero (come MirkoTeam), accento arancione del logo, testo bianco -->
+<!-- Kairos XC: SOLO i colori del logo. Fondo prugna scuro (come l'icona), sfumatura arancio → rosa, testo bianco -->
 <resources>
-    <color name="bg">#0A0A0B</color>
-    <color name="surface">#17161A</color>
-    <color name="surface2">#232127</color>
-    <color name="surface3">#2E2B33</color>
-    <color name="line">#34313A</color>
+    <color name="bg">#170A14</color>
+    <color name="surface">#E6231321</color>
+    <color name="surface2">#2E1A2B</color>
+    <color name="surface3">#3A2236</color>
+    <color name="line">#43293F</color>
     <color name="text">#FFFFFF</color>
-    <color name="text2">#E8E6EA</color>
-    <color name="muted">#B4B0B8</color>
-    <color name="dim">#8C8892</color>
+    <color name="text2">#F2E9EE</color>
+    <color name="muted">#C7B3C0</color>
+    <color name="dim">#957F8E</color>
     <color name="accent">#FF6A1F</color>
+    <color name="accent2">#FF2D6F</color>
+    <color name="accent_y">#FFC233</color>
     <color name="on_accent">#FFFFFF</color>
     <color name="on_accent_soft">#FFE2D2</color>
-    <color name="live">#E8233A</color>
-    <color name="overlay">#E60A0A0B</color>
-    <color name="badge">#CC0A0A0B</color>
+    <color name="live">#FF2D6F</color>
+    <color name="overlay">#E6170A14</color>
+    <color name="badge">#CC170A14</color>
 </resources>

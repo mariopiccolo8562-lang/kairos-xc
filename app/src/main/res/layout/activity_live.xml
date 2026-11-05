@@ -236,12 +236,6 @@
                     android:layout_width="0dp"
                     android:layout_weight="1"
                     android:text="Guarda" />
-                <Button
-                    android:id="@+id/guide"
-                    style="@style/Btn"
-                    android:layout_width="wrap_content"
-                    android:layout_marginLeft="8dp"
-                    android:text="Guida TV" />
                 <ImageButton
                     android:id="@+id/fav"
                     style="@style/IconBtn"

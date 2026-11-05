@@ -96,7 +96,6 @@ class LiveActivity : BaseActivity() {
         findViewById<View>(R.id.back).setOnClickListener { finish() }
         findViewById<View>(R.id.search).setOnClickListener { open(SearchActivity::class.java) }
         findViewById<View>(R.id.watch).setOnClickListener { play(curPos) }
-        findViewById<View>(R.id.guide).setOnClickListener { guide() }
         favBtn.setOnClickListener { toggleFav(curPos) }
 
         catAdapter = CatAdapter(
@@ -170,7 +169,7 @@ class LiveActivity : BaseActivity() {
         val changed = c.id != curCat
         pendingCat = null
         curCat = c.id
-        Store.lastLiveCat = c.id
+        if (!intent.hasExtra("cat")) Store.lastLiveCat = c.id // aperta da «Preferiti»: non cambia l'apertura normale
         val i = catAdapter.items.indexOfFirst { it.id == c.id }
         if (i >= 0) catAdapter.select(i)
         catName.text = "· " + c.name
@@ -387,19 +386,6 @@ class LiveActivity : BaseActivity() {
         if (curCat == Db.FAV) { pendingCat = catAdapter.items.find { it.id == Db.FAV }; loadChannels() }
     }
 
-    private fun guide() {
-        val r = curRow ?: return
-        val p = K.pl(r.s("pl"))
-        val sid = r.s("sid")
-        net {
-            val list = Epg.get(p, sid, 20)
-            ui {
-                if (list.isEmpty()) { Ui.toast("Guida TV non disponibile per questo canale"); return@ui }
-                val text = list.joinToString("\n") { Ui.hm(it.start) + "   " + it.title }
-                Ui.dialog(this, "Guida TV · " + r.s("name"), text)
-            }
-        }
-    }
 
     /* ---------------- lista canali ---------------- */
     private inner class ChannelAdapter : CursorAdapter<ChannelAdapter.H>() {

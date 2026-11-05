@@ -1,10 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Home di Kairos XC: stessa struttura di MirkoTeam (logo e icone in alto, tre cerchi al centro, Account/Preferiti e Impostazioni in basso),
-     grafica futuristica arancio/magenta/viola. Lo sfondo è una sola immagine piccola (960x540): leggera anche sulle chiavette. -->
+     grafica coi colori del logo (prugna scuro, arancio → rosa). Lo sfondo è una sola immagine (1280x720, 50 KB): leggera anche sulle chiavette. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:background="@color/bg">
+    android:layout_height="match_parent">
 
     <ImageView
         android:id="@+id/bg"
@@ -35,7 +34,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginLeft="10dp"
-                android:fontFamily="sans-serif-condensed"
+                android:fontFamily="@font/poppins"
                 android:text="Kairos"
                 android:textColor="#FFFFFFFF"
                 android:textSize="24sp"
@@ -44,8 +43,8 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginLeft="6dp"
-                android:fontFamily="sans-serif-condensed"
-                android:letterSpacing="0.12"
+                android:fontFamily="@font/poppins"
+                android:letterSpacing="0.08"
                 android:text="XC"
                 android:textColor="@color/accent"
                 android:textSize="24sp"
@@ -61,7 +60,7 @@
                 android:id="@+id/portal"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:fontFamily="sans-serif-condensed"
+                android:fontFamily="@font/poppins"
                 android:letterSpacing="0.14"
                 android:maxWidth="260dp"
                 android:singleLine="true"
@@ -168,7 +167,7 @@
                 android:id="@+id/clock"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:fontFamily="sans-serif-condensed"
+                android:fontFamily="@font/poppins"
                 android:letterSpacing="0.1"
                 android:textColor="#FFFFFFFF"
                 android:textSize="22sp"

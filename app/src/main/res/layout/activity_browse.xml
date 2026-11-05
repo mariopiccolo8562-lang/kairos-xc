@@ -2,8 +2,7 @@
 <!-- Home / Film / Serie: barra in alto come MirkoTeam (schede a sinistra, icone a destra), riquadro grande e righe di locandine -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:background="@color/bg">
+    android:layout_height="match_parent">
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rows"

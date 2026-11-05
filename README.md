@@ -1,6 +1,6 @@
 # Kairos XC
 
-App IPTV **nativa** per **Fire TV, Android TV, Google TV e telefoni**, con la **struttura di MirkoTeam** (Home a cerchi, portali, icone in alto e in basso) ma grafica **futuristica** arancio/magenta/viola e **molto più leggera e veloce**.
+App IPTV **nativa** per **Fire TV, Android TV, Google TV e telefoni**, con la **struttura di MirkoTeam** (Home a cerchi, portali, icone in alto e in basso) ma grafica moderna con i **colori del logo** (prugna scuro, arancio → rosa) e **molto più leggera e veloce**.
 Pacchetto `com.kairos.xc`: si installa **accanto** a Kairos Pro, Kairos TV e Kairos Lite e usa lo **stesso pannello Kairos** (stesso tipo di codice di attivazione `KX..-....`).
 
 ![logo](docs/logo-512.png)
@@ -62,5 +62,5 @@ Per ora l'app si presenta al pannello come Kairos TV (stesse funzioni) e si dist
 | `app/src/main/java/com/kairos/xc/` | `HomeActivity` (Home a cerchi, portali), `BrowseActivity` (Film/Serie), `Snap`, `LiveActivity`, `DetailActivity`, `PlayerActivity`, `Sync`/`Db` (liste su disco, per portale), `Panel` (pannello Kairos) |
 | `app/src/main/res/` | Grafica: colori, layout, logo |
 | `app/src/main/baseline-prof.txt` | Profilo di avvio |
-| `docs/` | Logo e banner (SVG e PNG), `src/sfondo.py` per rigenerare lo sfondo della Home |
+| `docs/` | Logo e banner (SVG e PNG), `src/grafica.py` per rigenerare sfondi e cerchi |
 | `.github/workflows/` | Compilazione e pubblicazione, preparazione dei segreti |

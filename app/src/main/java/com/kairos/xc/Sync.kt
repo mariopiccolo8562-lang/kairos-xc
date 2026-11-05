@@ -100,7 +100,11 @@ object Sync {
             val jobs = ArrayList<Pair<Int, String>>()
             for (part in parts) pls.forEachIndexed { i, p -> if (p.isXtream || part == "live") jobs.add(i to part) }
             val failed = HashSet<String>()
+            val myIds = pls.map { it.id }
+            var aborted = false
             jobs.forEachIndexed { n, (i, part) ->
+                // portale cambiato durante lo scaricamento: si lascia perdere questo e si passa subito al nuovo
+                if (aborted || K.activeIds() != myIds) { aborted = true; return@forEachIndexed }
                 val p = pls[i]
                 if (failed.contains(p.id)) return@forEachIndexed // server che non risponde: non si insiste
                 val from = n * 100 / jobs.size
@@ -124,21 +128,27 @@ object Sync {
                 emit(true)
             }
             val ids = pls.map { it.id }
-            if (errors.isEmpty()) {
+            if (aborted) {
+                // niente da segnare: le liste di questo portale si completano quando si torna a usarlo
+            } else if (errors.isEmpty()) {
                 Store.setSynced(ids, sig(pls), System.currentTimeMillis())
                 failAt = 0L
+                // scaricato senza errori (anche se il server ha mandato liste vuote): non si riscarica di continuo
+                dataOk = ids.joinToString(",")
             } else { failAt = System.currentTimeMillis(); failKey = ids.joinToString(",") }
             error = errors.joinToString(" · ")
         } catch (t: Throwable) {
             error = t.message ?: t.javaClass.simpleName
             failAt = System.currentTimeMillis()
+            failKey = pls.joinToString(",") { it.id }
         } finally {
             running = false
             pct = 100
             phase++
             emit(true)
-            // nel frattempo è stato scelto un altro portale: si scaricano subito le sue liste
-            ui { start() }
+            // nel frattempo è stato scelto un altro portale: si scaricano subito le sue liste (mai lo stesso di nuovo)
+            val done = pls.map { it.id }
+            ui { if (K.activeIds() != done) start() }
         }
     }
 

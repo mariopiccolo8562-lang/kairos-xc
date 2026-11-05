@@ -127,7 +127,8 @@ open class BrowseActivity : BaseActivity() {
         fillAccount()
         Sync.start()
         showSync()
-        if (built) refreshDynamic()
+        // portale o profilo cambiati (Impostazioni, Account): righe nuove; altrimenti solo preferiti e «Continua»
+        if (built) { if (sig() != loadedSig) build() else refreshDynamic() }
     }
 
     override fun onStop() {
@@ -228,8 +229,8 @@ open class BrowseActivity : BaseActivity() {
                 if (h == null && k == "home") h = Db.featured("series", pls, kids)
             }
             list.add(Row("hero", "", T_HERO))
-            if (k == "home") {
-                val rec = Store.recent()
+            if (k == "home" || k == "vod" || k == "series") {
+                val rec = recentFor(k)
                 if (rec.isNotEmpty()) list.add(Row("recent", "Continua a guardare", T_RECENT).also { it.recent = rec })
             }
             val tables = when (k) { "vod" -> listOf("vod"); "series" -> listOf("series"); else -> listOf("vod", "series") }
@@ -266,11 +267,21 @@ open class BrowseActivity : BaseActivity() {
         }
     }
 
+    /** «Continua a guardare»: in Film solo i film, in Serie TV solo gli episodi */
+    private fun recentFor(k: String): List<JSONObject> {
+        val all = Store.recent()
+        return when (k) {
+            "vod" -> all.filter { it.optString("kind", "movie") == "movie" }
+            "series" -> all.filter { it.optString("kind") == "series" }
+            else -> all
+        }
+    }
+
     /** di ritorno da un film: «Continua a guardare» e La mia lista aggiornati senza ricostruire tutto */
     private fun refreshDynamic() {
         val list = adapter.items
-        if (kind == "home") {
-            val rec = Store.recent()
+        if (kind == "home" || kind == "vod" || kind == "series") {
+            val rec = recentFor(kind)
             val i = list.indexOfFirst { it.type == T_RECENT }
             if (i >= 0 && rec.isNotEmpty()) { list[i].recent = rec; adapter.notifyItemChanged(i) }
             else if ((i >= 0) != rec.isNotEmpty()) { build(); return }
@@ -352,6 +363,8 @@ open class BrowseActivity : BaseActivity() {
 
     /* ---------------- azioni ---------------- */
     private fun openCard(c: Db.Card, autoplay: Boolean = false) {
+        // fotografia dell'ultima volta ancora da ricontrollare (pochi decimi di secondo): si aspetta il controllo
+        if (!built) return
         open(DetailActivity::class.java) { putExtra("table", c.table); putExtra("id", c.id); if (autoplay) putExtra("autoplay", true) }
     }
 
