@@ -19,7 +19,6 @@ Pacchetto `com.kairos.xc`: si installa **accanto** a Kairos Pro, Kairos TV e Kai
 
 - **Logo all'istante**: il logo è lo sfondo della finestra, lo disegna Android nel momento in cui si preme l'icona.
 - **Home leggerissima**: solo pulsanti e un'immagine di sfondo piccola (960×540), nessuna lista da caricare.
-- **Film e Serie già pronti**: l'ultima schermata è salvata in un file di pochi KB (`Snap`) e compare subito, prima di leggere il database.
 - **Portali**: le liste del portale in uso e di quello usato prima restano sul disco, quindi tornare indietro è immediato.
 - **Abbonamento**: si parte con l'ultimo stato salvato, il pannello si ricontrolla in sottofondo.
 - **Profilo di avvio** (Baseline Profile): Android compila in anticipo il codice usato all'apertura e nelle liste (Android 7 e successivi).
@@ -29,8 +28,8 @@ Pacchetto `com.kairos.xc`: si installa **accanto** a Kairos Pro, Kairos TV e Kai
 
 - **Home come MirkoTeam**: in alto logo Kairos XC, nome del portale in uso e scadenza, **Cerca · VPN · MSG · UPDATE**; al centro **Diretta Live TV · Film On Demand · Serie TV**; in basso **Account · Favorite** e **Settings**.
 - **Account = portali**: i portali sono le playlist assegnate al cliente nel pannello (chiamale per esempio `SERVER-1-OTT`, `SERVER-2-ATL`…). Da *Account* il cliente sceglie il portale; l'app ne usa uno alla volta. Se nel pannello il permesso «cambio playlist» è spento, il portale lo decide il fornitore.
-- **Live TV** con categorie e guida adesso/dopo; OK apre subito lo schermo intero.
-- Film e Serie TV con schede, stagioni ed episodi, «Continua a guardare», preferiti, ricerca, profili (anche bambini).
+- **Live TV** con categorie e guida adesso/dopo: primo OK = anteprima nel riquadro, secondo OK = schermo intero (si può spegnere nelle Impostazioni).
+- **Film e Serie TV** come MirkoTeam: categorie a sinistra e locandine a griglia (con Preferiti e «Continua a guardare»), schede, stagioni ed episodi, ricerca, profili (anche bambini).
 - Dal pannello: attivazione e scadenza, portali/playlist, cambio DNS, *Disconnetti*, visioni contemporanee, permessi, profili, collegamento di altre TV, messaggi (MSG), VPN, errori. In *Utenti online* la versione compare come `xc …`.
 - **Aggiornamenti automatici** dalle release di questo repository.
 
@@ -59,7 +58,7 @@ Per ora l'app si presenta al pannello come Kairos TV (stesse funzioni) e si dist
 
 | Cartella | Cosa contiene |
 |---|---|
-| `app/src/main/java/com/kairos/xc/` | `HomeActivity` (Home a cerchi, portali), `BrowseActivity` (Film/Serie), `Snap`, `LiveActivity`, `DetailActivity`, `PlayerActivity`, `Sync`/`Db` (liste su disco, per portale), `Panel` (pannello Kairos) |
+| `app/src/main/java/com/kairos/xc/` | `HomeActivity` (Home a cerchi, portali), `VodActivity` (Film/Serie a griglia), `LiveActivity`, `DetailActivity`, `PlayerActivity`, `Sync`/`Db` (liste su disco, per portale), `Panel` (pannello Kairos) |
 | `app/src/main/res/` | Grafica: colori, layout, logo |
 | `app/src/main/baseline-prof.txt` | Profilo di avvio |
 | `docs/` | Logo e banner (SVG e PNG), `src/grafica.py` per rigenerare sfondi e cerchi |

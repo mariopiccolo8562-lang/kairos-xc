@@ -88,6 +88,7 @@ object Db {
     const val ALL = "*all"
     const val FAV = "*fav"
     const val NEW = "*new"
+    const val REC = "*rec"
 
     private class Q(var where: String, val args: ArrayList<String>)
 
@@ -171,10 +172,22 @@ object Db {
     }
 
     /* ---------------- film e serie ---------------- */
-    fun vod(table: String, cat: String, pls: List<String>, kids: Boolean, text: String, favs: Set<String>): Cursor {
+    /** [recent] = chiavi di «Continua a guardare», dalla più recente */
+    fun vod(table: String, cat: String, pls: List<String>, kids: Boolean, text: String, favs: Set<String>, recent: List<String> = emptyList()): Cursor {
         val q = base(pls, kids)
         var order = "_id"
+        val orderArgs = ArrayList<String>()
         when (cat) {
+            REC -> {
+                val keys = recent.take(60)
+                if (keys.isEmpty()) q.where += " AND 0" else {
+                    q.where += " AND k IN (" + keys.joinToString(",") { "?" } + ")"
+                    q.args.addAll(keys)
+                    val sb = StringBuilder("CASE k")
+                    keys.forEachIndexed { i, key -> sb.append(" WHEN ? THEN ").append(i); orderArgs.add(key) }
+                    order = sb.append(" ELSE 999 END").toString()
+                }
+            }
             ALL -> order = "added DESC, _id"
             FAV -> favIn(q, favs)
             NEW -> order = "added DESC, _id"
@@ -183,7 +196,7 @@ object Db {
         val t = text.trim()
         if (t.isNotEmpty()) { q.where += " AND name LIKE ? ESCAPE '\\'"; q.args.add("%" + like(t) + "%") }
         val limit = if (cat == NEW) " LIMIT 200" else ""
-        val c = r.rawQuery("SELECT _id, k, pl, cat, name, img, sid, ext, url, rating, year FROM $table WHERE ${q.where} ORDER BY $order$limit", q.args.toTypedArray())
+        val c = r.rawQuery("SELECT _id, k, pl, cat, name, img, sid, ext, url, rating, year FROM $table WHERE ${q.where} ORDER BY $order$limit", (q.args + orderArgs).toTypedArray())
         c.count
         return c
     }

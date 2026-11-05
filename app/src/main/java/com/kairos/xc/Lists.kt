@@ -127,10 +127,11 @@ fun RecyclerView.focusVisible() {
 }
 
 /** categorie fisse in testa alle liste */
-fun fixedCats(ctx: Context, kind: String, total: Int, favs: Int): List<Db.Cat> {
+fun fixedCats(ctx: Context, kind: String, total: Int, favs: Int, recent: Int = 0): List<Db.Cat> {
     val out = ArrayList<Db.Cat>()
     out.add(Db.Cat(Db.ALL, if (kind == "live") "Tutti i canali" else "Tutti", total))
     out.add(Db.Cat(Db.FAV, "Preferiti", favs))
+    if (kind != "live" && recent > 0) out.add(Db.Cat(Db.REC, "Continua a guardare", recent))
     if (kind != "live") out.add(Db.Cat(Db.NEW, "Aggiunti di recente", -1))
     return out
 }

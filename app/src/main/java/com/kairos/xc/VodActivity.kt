@@ -45,7 +45,7 @@ class VodActivity : BaseActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_vod)
         table = if (intent.getStringExtra("kind") == "series") "series" else "vod"
-        curCat = intent.getStringExtra("cat") ?: Db.ALL // «Vedi tutti» da una riga della Home
+        curCat = intent.getStringExtra("cat") ?: Db.ALL // per esempio i Preferiti dalla Home
         clock(findViewById(R.id.clock))
         findViewById<TextView>(R.id.title).text = if (table == "series") "Serie TV" else "Film"
         findViewById<View>(R.id.back).setOnClickListener { finish() }
@@ -99,6 +99,7 @@ class VodActivity : BaseActivity() {
         when {
             // portale o profilo cambiati nel frattempo
             loadedSig.isNotEmpty() && sig() != loadedSig -> loadCats(refresh = true)
+            loadedSig.isNotEmpty() && (recentKeys().size != (catAdapter.items.find { it.id == Db.REC }?.count ?: 0) || curCat == Db.REC) -> loadCats(refresh = true)
             // tolto/aggiunto un preferito dalla scheda: la griglia Preferiti e il conteggio si aggiornano
             before != favSet -> {
                 catAdapter.items.find { it.id == Db.FAV }?.let { it.count = Store.favsIn(table, K.activeIds()).size; catAdapter.notifyItemChanged(1) }
@@ -126,7 +127,7 @@ class VodActivity : BaseActivity() {
             val total = Db.count(table, pls, kids)
             ui {
                 if (isFinishing) return@ui
-                val all = fixedCats(this, table, total, favs.count { f -> pls.any { f.startsWith("$it:") } }) + list
+                val all = fixedCats(this, table, total, favs.count { f -> pls.any { f.startsWith("$it:") } }, recentKeys().size) + list
                 var idx = all.indexOfFirst { it.id == curCat }
                 if (idx < 0) idx = 0
                 catAdapter.set(all, idx)
@@ -147,9 +148,10 @@ class VodActivity : BaseActivity() {
         val kids = K.kids
         val favs = Store.favs(table)
         val text = query.text.toString()
+        val rec = recentKeys()
         val my = ++seq
         bg {
-            val cur = Db.vod(table, c.id, pls, kids, text, favs)
+            val cur = Db.vod(table, c.id, pls, kids, text, favs, rec)
             ui {
                 if (isFinishing || my != seq) { cur.close(); return@ui }
                 val hadFocus = grid.hasFocus()
@@ -160,6 +162,7 @@ class VodActivity : BaseActivity() {
                 if (n == 0) empty.text = when {
                     text.isNotBlank() -> "Nessun risultato per «$text»"
                     c.id == Db.FAV -> "Nessun preferito: tieni premuto OK su una locandina per aggiungerla."
+                    c.id == Db.REC -> "Niente da continuare."
                     Sync.running -> "Sto caricando i contenuti…"
                     else -> "Nessun contenuto."
                 }
@@ -167,6 +170,12 @@ class VodActivity : BaseActivity() {
             }
         }
     }
+
+    /** «Continua a guardare»: film (o serie) iniziati, dal più recente; per le serie la serie intera */
+    private fun recentKeys(): List<String> = Store.recent().mapNotNull {
+        if (table == "series") it.optString("group").takeIf { g -> it.optString("kind") == "series" && g.isNotEmpty() }
+        else it.optString("id").takeIf { _ -> it.optString("kind", "movie") == "movie" }
+    }.distinct()
 
     private fun focusCats() = cats.focusAt(catAdapter.selected)
     private fun focusGrid() = grid.focusVisible()

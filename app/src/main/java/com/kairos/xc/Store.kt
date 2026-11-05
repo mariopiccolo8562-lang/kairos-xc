@@ -70,7 +70,7 @@ object Store {
         set(v) = put("liteMode", v)
     /** anteprima nella lista canali: click (primo OK = riquadro, secondo OK = schermo intero) | off */
     var preview: String
-        get() = "off" // Kairos XC: niente anteprima nella lista canali, OK apre subito lo schermo intero (più fluida)
+        get() = s("previewMode", "click") // primo OK = anteprima nel riquadro, secondo OK = schermo intero
         set(v) = put("previewMode", v)
     var plChoice: String
         get() = s("plChoice")

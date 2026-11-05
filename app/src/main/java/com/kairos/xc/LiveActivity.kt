@@ -67,6 +67,7 @@ class LiveActivity : BaseActivity() {
     private val previewR = Runnable { updatePreview() }
     /** canale partito nel riquadro: il prossimo OK su di lui apre lo schermo intero */
     private var previewId = 0L
+    private var previewK = ""
     private var videoSeq = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -231,6 +232,8 @@ class LiveActivity : BaseActivity() {
         curPos = pos
         val c = chAdapter.cursor ?: return
         curRow = try { if (c.isClosed || !c.moveToPosition(pos)) return; Db.current(c) } catch (_: Exception) { return }
+        // stesso canale ritrovato dopo un aggiornamento dell'elenco: l'anteprima continua
+        if (previewId != 0L && curRow?.s("k") == previewK) { previewId = curRow?.l("_id") ?: previewId; return }
         stopVideo()
         App.main.removeCallbacks(previewR)
         App.main.postDelayed(previewR, 180)
@@ -305,6 +308,7 @@ class LiveActivity : BaseActivity() {
         val url = Play.liveUrls(r).firstOrNull() ?: run { playRow(r.l("_id"), r.s("k")); return }
         val id = r.l("_id")
         previewId = id
+        previewK = r.s("k")
         val my = ++videoSeq
         pspin.visibility = View.VISIBLE
         hint(key() + " · schermo intero")

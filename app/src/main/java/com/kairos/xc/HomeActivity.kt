@@ -31,8 +31,9 @@ class HomeActivity : BaseActivity() {
 
         val live = findViewById<View>(R.id.live)
         live.setOnClickListener { open(LiveActivity::class.java) }
-        findViewById<View>(R.id.film).setOnClickListener { open(BrowseActivity::class.java) { putExtra("kind", "vod") } }
-        findViewById<View>(R.id.series).setOnClickListener { open(BrowseActivity::class.java) { putExtra("kind", "series") } }
+        // Film e Serie: categorie a sinistra e locandine a griglia (come MirkoTeam)
+        findViewById<View>(R.id.film).setOnClickListener { open(VodActivity::class.java) { putExtra("kind", "vod") } }
+        findViewById<View>(R.id.series).setOnClickListener { open(VodActivity::class.java) { putExtra("kind", "series") } }
         findViewById<View>(R.id.search).setOnClickListener { open(SearchActivity::class.java) }
         findViewById<View>(R.id.vpn).setOnClickListener { toggleVpn() }
         findViewById<View>(R.id.msg).setOnClickListener { showMessages() }
@@ -142,9 +143,12 @@ class HomeActivity : BaseActivity() {
 
     /* ---------------- altri pulsanti ---------------- */
     private fun favorites() {
-        Ui.choose(this, "Preferiti", arrayOf("Canali preferiti", "Film e serie preferiti"), -1) { i ->
-            if (i == 0) open(LiveActivity::class.java) { putExtra("cat", Db.FAV) }
-            else open(BrowseActivity::class.java) { putExtra("kind", "list") }
+        Ui.choose(this, "Preferiti", arrayOf("Canali preferiti", "Film preferiti", "Serie TV preferite"), -1) { i ->
+            when (i) {
+                0 -> open(LiveActivity::class.java) { putExtra("cat", Db.FAV) }
+                1 -> open(VodActivity::class.java) { putExtra("kind", "vod"); putExtra("cat", Db.FAV) }
+                else -> open(VodActivity::class.java) { putExtra("kind", "series"); putExtra("cat", Db.FAV) }
+            }
         }
     }
 
