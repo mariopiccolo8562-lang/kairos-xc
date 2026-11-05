@@ -11,7 +11,7 @@ import android.database.sqlite.SQLiteOpenHelper
  */
 object Db {
     private const val NAME = "lib.db"
-    private const val VERSION = 3 // 2: versioni dei canali (qualità adattiva) · 3: giorni di Catchup (arch)
+    private const val VERSION = 4 // 2: versioni dei canali · 3: colonna arch · 4: indice per le liste canali grandi
 
     private val SCHEMA = listOf(
         "CREATE TABLE cat (kind TEXT, id TEXT, name TEXT, ord INTEGER, pl TEXT, adult INTEGER)",
@@ -20,6 +20,7 @@ object Db {
         "CREATE INDEX live_cat ON live(cat)",
         "CREATE INDEX live_q ON live(qkey)",
         "CREATE INDEX live_k ON live(k)",
+        "CREATE INDEX live_pcn ON live(pl, cat, num)",
         "CREATE TABLE vod (_id INTEGER PRIMARY KEY, k TEXT, pl TEXT, cat TEXT, name TEXT, img TEXT, sid TEXT, ext TEXT, url TEXT, rating TEXT, year TEXT, added INTEGER, adult INTEGER)",
         "CREATE INDEX vod_cat ON vod(cat)",
         "CREATE INDEX vod_k ON vod(k)",
@@ -36,6 +37,8 @@ object Db {
         init { setWriteAheadLoggingEnabled(true) }
         override fun onCreate(db: SQLiteDatabase) { SCHEMA.forEach { db.execSQL(it) } }
         override fun onUpgrade(db: SQLiteDatabase, oldV: Int, newV: Int) {
+            // 3 → 4: solo un indice in più, le liste scaricate restano
+            if (oldV == 3) { db.execSQL("CREATE INDEX IF NOT EXISTS live_pcn ON live(pl, cat, num)"); return }
             listOf("cat", "live", "vod", "series", "ep").forEach { db.execSQL("DROP TABLE IF EXISTS $it") }
             onCreate(db)
             Store.clearSync() // archivio nuovo: le liste si ricaricano
@@ -178,7 +181,7 @@ object Db {
             else -> { q.where += " AND cat = ?"; q.args.add(cat) }
         }
         val t = text.trim()
-        if (t.isNotEmpty()) { q.where += " AND name LIKE ?"; q.args.add("%" + t.replace("%", "").replace("_", "") + "%") }
+        if (t.isNotEmpty()) { q.where += " AND name LIKE ? ESCAPE '\\'"; q.args.add("%" + like(t) + "%") }
         val limit = if (cat == NEW) " LIMIT 200" else ""
         val c = r.rawQuery("SELECT _id, k, pl, cat, name, img, sid, ext, url, rating, year FROM $table WHERE ${q.where} ORDER BY $order$limit", q.args.toTypedArray())
         c.count
@@ -257,18 +260,25 @@ object Db {
     }
 
     /* ---------------- ricerca ---------------- */
-    class Hit(val table: String, val id: Long, val name: String, val img: String, val cat: String)
+    class Hit(val table: String, val id: Long, val name: String, val img: String, val cat: String, val k: String)
+
+    /** testo cercato così com'è: % e _ sono lettere normali (es. «UK_BBC», «100%») */
+    private fun like(t: String) = t.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+    /** titolo cercato per chiave stabile (portale:numero), non cambia quando le liste si aggiornano */
+    fun oneByK(table: String, k: String): Row? =
+        if (k.isEmpty()) null else r.rawQuery("SELECT * FROM $table WHERE k = ? LIMIT 1", arrayOf(k)).use { c -> if (c.moveToFirst()) row(c) else null }
 
     fun search(text: String, pls: List<String>, kids: Boolean): List<Hit> {
-        val t = text.trim().replace("%", "").replace("_", "")
+        val t = text.trim()
         if (t.length < 2 || pls.isEmpty()) return emptyList()
         val out = ArrayList<Hit>()
         for ((table, img) in listOf("live" to "logo", "vod" to "img", "series" to "img")) {
             val q = base(pls, kids)
-            q.where += " AND name LIKE ?"
-            q.args.add("%$t%")
-            r.rawQuery("SELECT _id, name, $img, cat FROM $table WHERE ${q.where} ORDER BY name LIMIT 60", q.args.toTypedArray()).use { c ->
-                while (c.moveToNext()) out.add(Hit(table, c.getLong(0), c.getString(1) ?: "", c.getString(2) ?: "", c.getString(3) ?: ""))
+            q.where += " AND name LIKE ? ESCAPE '\\'"
+            q.args.add("%" + like(t) + "%")
+            r.rawQuery("SELECT _id, name, $img, cat, k FROM $table WHERE ${q.where} ORDER BY name LIMIT 60", q.args.toTypedArray()).use { c ->
+                while (c.moveToNext()) out.add(Hit(table, c.getLong(0), c.getString(1) ?: "", c.getString(2) ?: "", c.getString(3) ?: "", c.getString(4) ?: ""))
             }
         }
         return out

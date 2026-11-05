@@ -49,6 +49,8 @@ open class BrowseActivity : BaseActivity() {
         @Volatile var cards: List<Db.Card>? = null
         var recent: List<JSONObject> = emptyList()
         var loading = false
+        /** locandine di prima mostrate mentre si rileggono quelle nuove (niente righe vuote, niente salti del cursore) */
+        @Volatile var stale = false
         var more = false
         var count = 0
     }
@@ -167,7 +169,12 @@ open class BrowseActivity : BaseActivity() {
 
     private fun toggleVpn() {
         val s = Panel.state ?: return
-        if (s.vpnMode == "force") { Ui.toast(KxVpn.message.ifEmpty { "VPN sempre attiva, impostata dal tuo fornitore" }); return }
+        if (s.vpnMode == "force") {
+            // «sempre attiva»: se è spenta (permesso negato o errore) la si richiede di nuovo
+            if (KxVpn.state != "on") { Vpns.retry(); Vpns.apply(this); Ui.toast("VPN in attivazione…") }
+            else Ui.toast("VPN sempre attiva, impostata dal tuo fornitore")
+            return
+        }
         Store.vpnUser = !Store.vpnUser
         if (Store.vpnUser) Vpns.retry()
         Vpns.apply(this)
@@ -187,20 +194,25 @@ open class BrowseActivity : BaseActivity() {
     private fun onSync() {
         showSync()
         var changed = false
-        for (t in listOf("vod", "series")) { val v = Sync.ver(t); if (vers[t] != v) { vers[t] = v; changed = true } }
+        val mine = when (kind) { "vod" -> listOf("vod"); "series" -> listOf("series"); else -> listOf("vod", "series") }
+        for (t in listOf("vod", "series")) { val v = Sync.ver(t); if (vers[t] != v) { vers[t] = v; if (t in mine) changed = true } }
         if (changed && !isFinishing) build()
     }
 
     private fun showSync() {
         when {
             Sync.running -> { sync.visibility = View.VISIBLE; sync.text = "Aggiornamento delle liste… ${Sync.pct}%" }
-            Sync.error.isNotEmpty() && !built -> { sync.visibility = View.VISIBLE; sync.text = "Liste non aggiornate: ${Sync.error}" }
+            Sync.error.isNotEmpty() -> { sync.visibility = View.VISIBLE; sync.text = "Liste non aggiornate: ${Sync.error}" }
+            emptyMsg.isNotEmpty() -> { sync.visibility = View.VISIBLE; sync.text = emptyMsg }
             else -> sync.visibility = View.GONE
         }
     }
 
     /* ---------------- righe ---------------- */
     private var fromSnap = false
+    private var snapAt = 0L
+    /** portale senza film (o serie): lo si dice invece di lasciare lo schermo vuoto */
+    private var emptyMsg = ""
     private fun snapSig() = kind + "|" + sig() + "|" + Store.syncAt + "|" + App.lite
 
     private fun build() {
@@ -214,7 +226,11 @@ open class BrowseActivity : BaseActivity() {
         if (!built && !fromSnap) {
             val sn = Snap.load(k, snapKey)
             if (sn != null) {
+                val rec = recentFor(k)
+                sn.rows.removeAll { it.type == T_RECENT && rec.isEmpty() }
+                sn.rows.filter { it.type == T_RECENT }.forEach { it.recent = rec }
                 fromSnap = true
+                snapAt = android.os.SystemClock.elapsedRealtime()
                 hero = sn.hero
                 adapter.items = sn.rows
                 adapter.notifyDataSetChanged()
@@ -236,7 +252,7 @@ open class BrowseActivity : BaseActivity() {
             val tables = when (k) { "vod" -> listOf("vod"); "series" -> listOf("series"); else -> listOf("vod", "series") }
             for (t in tables) {
                 val name = if (t == "vod") "Film" else "Serie TV"
-                if (Store.favs(t).isNotEmpty() || k == "list") list.add(Row("fav$t", if (tables.size > 1) "La mia lista · $name" else "La mia lista", T_POSTERS, t, Db.FAV))
+                if (Store.favsIn(t, pls).isNotEmpty() || k == "list") list.add(Row("fav$t", if (tables.size > 1) "La mia lista · $name" else "La mia lista", T_POSTERS, t, Db.FAV))
             }
             if (k != "list") {
                 for (t in tables) list.add(Row("new$t", if (t == "vod") "Film aggiunti di recente" else "Serie TV aggiunte di recente", T_POSTERS, t, Db.NEW))
@@ -249,7 +265,9 @@ open class BrowseActivity : BaseActivity() {
             }
             // le prime righe arrivano già piene: la schermata compare completa
             list.filter { it.type == T_POSTERS }.take(3).forEach { r -> r.cards = Db.cards(r.table, r.cat, pls, kids, Store.favs(r.table), LIMIT) }
+            val total = if (k == "list") 1 else tables.sumOf { Db.count(it, pls, kids) }
             ui {
+                emptyMsg = if (total > 0) "" else if (Sync.running) "" else if (k == "series") "Nessuna serie TV in questo portale" else "Nessun film in questo portale"
                 if (isFinishing || my != seq) return@ui
                 // uguale alla fotografia già mostrata: non si tocca niente (il cursore resta dov'è)
                 if (fromSnap && !built && Snap.same(adapter.items, hero, list, h)) {
@@ -257,6 +275,9 @@ open class BrowseActivity : BaseActivity() {
                     showSync()
                     return@ui
                 }
+                // righe già sullo schermo: restano le locandine di prima finché arrivano quelle nuove
+                val old = adapter.items.associateBy { it.key }
+                for (r in list) if (r.type == T_POSTERS && r.cards == null) old[r.key]?.cards?.let { r.cards = it; r.stale = true }
                 hero = h
                 adapter.items = list
                 adapter.notifyDataSetChanged()
@@ -286,13 +307,14 @@ open class BrowseActivity : BaseActivity() {
             if (i >= 0 && rec.isNotEmpty()) { list[i].recent = rec; adapter.notifyItemChanged(i) }
             else if ((i >= 0) != rec.isNotEmpty()) { build(); return }
         }
-        list.forEachIndexed { i, r -> if (r.cat == Db.FAV) { r.cards = null; r.loading = false; adapter.notifyItemChanged(i) } }
+        list.forEachIndexed { i, r -> if (r.cat == Db.FAV) { r.stale = true; r.loading = false; adapter.notifyItemChanged(i) } }
         val hasFav = list.any { it.cat == Db.FAV }
-        if (!hasFav && (Store.favs("vod").isNotEmpty() || Store.favs("series").isNotEmpty())) build()
+        val pls = K.activeIds()
+        if (!hasFav && (Store.favsIn("vod", pls).isNotEmpty() || Store.favsIn("series", pls).isNotEmpty())) build()
     }
 
     private fun loadRow(r: Row, pos: Int) {
-        if (r.loading || r.cards != null) return
+        if (r.loading || (r.cards != null && !r.stale)) return
         r.loading = true
         val pls = K.activeIds()
         val kids = K.kids
@@ -303,6 +325,7 @@ open class BrowseActivity : BaseActivity() {
             ui {
                 if (isFinishing || my != seq) return@ui
                 r.cards = c
+                r.stale = false
                 r.loading = false
                 val i = adapter.items.indexOf(r)
                 if (i >= 0) adapter.notifyItemChanged(i)
@@ -364,8 +387,8 @@ open class BrowseActivity : BaseActivity() {
     /* ---------------- azioni ---------------- */
     private fun openCard(c: Db.Card, autoplay: Boolean = false) {
         // fotografia dell'ultima volta ancora da ricontrollare (pochi decimi di secondo): si aspetta il controllo
-        if (!built) return
-        open(DetailActivity::class.java) { putExtra("table", c.table); putExtra("id", c.id); if (autoplay) putExtra("autoplay", true) }
+        if (!built && fromSnap && android.os.SystemClock.elapsedRealtime() - snapAt < 4_000) return
+        open(DetailActivity::class.java) { putExtra("table", c.table); putExtra("id", c.id); putExtra("k", c.k); if (autoplay) putExtra("autoplay", true) }
     }
 
     private fun toggleFav(c: Db.Card) {
@@ -444,9 +467,10 @@ open class BrowseActivity : BaseActivity() {
                 (r.type == T_RECENT && r.recent.isEmpty())
             h.itemView.layoutParams.height = if (empty) 0 else ViewGroup.LayoutParams.WRAP_CONTENT
             if (r.type == T_POSTERS && r.cat == Db.FAV && r.cards?.isEmpty() == true) h.title.text = r.title + "  ·  vuota: tieni premuto OK su una locandina per aggiungerla"
-            if (h.cards.row !== r) { h.cards.row = r; h.list.scrollToPosition(0) }
+            // stessa riga ricostruita (aggiornamento in sottofondo): resta dov'era, niente ritorno all'inizio
+            if (h.cards.row?.key != r.key) { h.cards.row = r; h.list.scrollToPosition(0) } else h.cards.row = r
             h.cards.notifyDataSetChanged()
-            if (r.type == T_POSTERS && r.cards == null) loadRow(r, i)
+            if (r.type == T_POSTERS && (r.cards == null || r.stale)) loadRow(r, i)
         }
     }
 
@@ -488,6 +512,16 @@ open class BrowseActivity : BaseActivity() {
 
     private inner class CardAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
         var row: Row? = null
+
+        // id stabili: aggiornando la riga la locandina selezionata resta selezionata
+        init { setHasStableIds(true) }
+
+        override fun getItemId(i: Int): Long {
+            val r = row ?: return RecyclerView.NO_ID
+            if (r.type == T_RECENT) return r.recent.getOrNull(i)?.optString("id")?.hashCode()?.toLong() ?: i.toLong()
+            val c = r.cards?.getOrNull(i) ?: return -2L // «Vedi tutti»
+            return c.k.hashCode().toLong() shl 8 xor c.id
+        }
 
         override fun getItemCount(): Int {
             val r = row ?: return 0

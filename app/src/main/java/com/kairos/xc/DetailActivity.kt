@@ -63,8 +63,10 @@ class DetailActivity : BaseActivity() {
         Ui.zoom(playBtn, 1.04f)
 
         val id = intent.getLongExtra("id", 0)
+        // si cerca per chiave stabile (portale:numero): dopo un aggiornamento delle liste il numero interno cambia
+        val wantK = intent.getStringExtra("k").orEmpty()
         bg {
-            val r = Db.one(table, id)
+            val r = if (wantK.isNotEmpty()) Db.oneByK(table, wantK) else Db.one(table, id)
             ui {
                 if (r == null) { Ui.toast("Contenuto non trovato"); finish(); return@ui }
                 row = r
@@ -134,6 +136,19 @@ class DetailActivity : BaseActivity() {
             net {
                 val j = try { JSONObject(Http.text(url, connectMs = 12_000, readMs = 30_000).text) } catch (_: Exception) { null }
                 val list = ArrayList<Ep>()
+                fun addEp(o: JSONObject, sk: String, i: Int) {
+                    val inf = o.optJSONObject("info")
+                    list.add(Ep(o.optString("id"), o.optString("season", sk).toIntOrNull() ?: sk.toIntOrNull() ?: 1, o.optString("episode_num").toIntOrNull() ?: (i + 1),
+                        o.optString("title"), o.optString("container_extension"), "", inf?.optString("movie_image") ?: "", if (inf != null) durText(inf) else ""))
+                }
+                // alcuni server mandano gli episodi come elenco (di stagioni o di episodi) invece che per stagione
+                j?.optJSONArray("episodes")?.let { arr ->
+                    for (x in 0 until arr.length()) {
+                        val v = arr.opt(x)
+                        if (v is JSONArray) for (i in 0 until v.length()) v.optJSONObject(i)?.let { addEp(it, (x + 1).toString(), i) }
+                        else if (v is JSONObject) addEp(v, "1", x)
+                    }
+                }
                 val eps = j?.optJSONObject("episodes")
                 if (eps != null) {
                     val it = eps.keys()
@@ -188,6 +203,8 @@ class DetailActivity : BaseActivity() {
         if (list.isEmpty()) { loading.visibility = View.VISIBLE; loading.text = "Nessun episodio disponibile."; return }
         val last = lastEpisode()
         season = last?.season ?: seasons.first()
+        // da «Continua a guardare»: riparte subito l'episodio giusto, con i successivi in coda
+        if (intent.getBooleanExtra("autoplay", false)) { intent.removeExtra("autoplay"); App.main.post { if (!isFinishing) play(false) } }
         seasonAdapter.notifyDataSetChanged()
         epAdapter.items = list.filter { it.season == season }
         epAdapter.notifyDataSetChanged()

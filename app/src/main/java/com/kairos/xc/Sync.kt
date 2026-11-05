@@ -112,6 +112,8 @@ object Sync {
                 val step = { v: Int -> setPct(from + v * span / 100) }
                 db.beginTransactionNonExclusive()
                 try {
+                    // prima di cancellare le liste vecchie: la linea risponde davvero? (pagina d'errore, linea scaduta…)
+                    if (p.isXtream && part == "live") checkLine(p)
                     if (p.isXtream) Db.dropKind(db, p.id, part) else Db.dropPlaylist(db, p.id)
                     val st = Stmts(db, i * 1_000_000L + parts.indexOf(part) * 300_000L)
                     if (p.isXtream) xtream(p, st, part, step) else m3u(p, st, step)
@@ -271,6 +273,23 @@ object Sync {
         return Regex("\\((19|20)\\d{2}\\)").find(name)?.value?.trim('(', ')')
     }
 
+    /**
+     * Linea Xtream attiva? player_api.php senza azione risponde con user_info: se «auth» è 0
+     * (credenziali sbagliate, linea scaduta o disattivata) si segnala l'errore invece di svuotare le liste.
+     */
+    private fun checkLine(p: Playlist) {
+        val x = p.xt ?: return
+        val url = "${x.first}/player_api.php?username=${Playlist.enc(x.second)}&password=${Playlist.enc(x.third)}"
+        val r = Http.text(url, connectMs = 20_000, readMs = 30_000)
+        if (r.code >= 400) throw Exception("il server delle playlist ha risposto HTTP ${r.code}")
+        val j = try { org.json.JSONObject(r.text) } catch (_: Exception) { throw Exception("il server delle playlist ha risposto con una pagina non valida") }
+        val ui = j.optJSONObject("user_info") ?: return
+        val auth = ui.opt("auth")?.toString() ?: "1"
+        if (auth == "0" || auth == "false") throw Exception("linea non attiva sul server (utente, password o scadenza)")
+        val st = ui.optString("status")
+        if (st.isNotEmpty() && !st.equals("Active", true)) throw Exception("linea «$st» sul server")
+    }
+
     /** ogni oggetto di un array JSON (o dei valori di un oggetto), letto a flusso */
     private fun eachObject(url: String, fn: (HashMap<String, String>) -> Unit) {
         val c = Http.open(url, connectMs = 20_000, readMs = 90_000)
@@ -291,7 +310,8 @@ object Sync {
                     while (r.hasNext()) { r.nextName(); if (r.peek() == JsonToken.BEGIN_OBJECT) fn(flat(r)) else r.skipValue() }
                     r.endObject()
                 }
-                else -> {}
+                // pagina HTML (blocco, errore del server…) o testo: non è una lista, le liste di prima restano
+                else -> throw Exception("il server delle playlist ha risposto con una pagina non valida")
             }
             r.close()
         } finally {
@@ -414,6 +434,8 @@ object Sync {
                         s.executeInsert()
                     }
                 }
+                // nessun contenuto: pagina d'errore o playlist sbagliata, le liste di prima restano
+                if (n == 0L) throw Exception("la playlist è vuota o non è una M3U valida")
             }
             step(100)
         } finally {

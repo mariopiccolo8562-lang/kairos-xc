@@ -79,14 +79,17 @@ object Players {
             .setMediaSourceFactory(sources)
             .build()
         p.setVideoChangeFrameRateStrategy(C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_ONLY_IF_SEAMLESS)
+        // telefoni: cuffie staccate = pausa (niente audio a sorpresa dall'altoparlante)
+        p.setHandleAudioBecomingNoisy(true)
         return p
     }
 
-    fun item(url: String): MediaItem {
+    /** [hls] = indirizzo senza estensione che si è rivelato HLS */
+    fun item(url: String, hls: Boolean = false): MediaItem {
         val b = MediaItem.Builder().setUri(Uri.parse(url))
         val low = url.lowercase().substringBefore('?')
         when {
-            low.endsWith(".m3u8") || low.endsWith(".m3u") -> b.setMimeType(MimeTypes.APPLICATION_M3U8)
+            hls || low.endsWith(".m3u8") || low.endsWith(".m3u") -> b.setMimeType(MimeTypes.APPLICATION_M3U8)
             low.endsWith(".ts") -> b.setMimeType(MimeTypes.VIDEO_MP2T)
         }
         return b.build()

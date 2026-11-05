@@ -67,9 +67,10 @@ class SearchActivity : BaseActivity() {
         when (h.table) {
             "live" -> {
                 Store.lastLiveId = h.id
+                Store.lastLiveK = h.k
                 startActivity(Intent(this, PlayerActivity::class.java).putExtra("kind", "live").putExtra("cat", h.cat).putExtra("rowId", h.id))
             }
-            else -> open(DetailActivity::class.java) { putExtra("table", h.table); putExtra("id", h.id) }
+            else -> open(DetailActivity::class.java) { putExtra("table", h.table); putExtra("id", h.id); putExtra("k", h.k) }
         }
     }
 

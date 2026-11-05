@@ -79,7 +79,10 @@ class SettingsActivity : BaseActivity() {
             row(R.drawable.ic_layers, "Portale", "Scegli il server da usare", cur?.name ?: "") { choosePl() }
         }
         if (s.vpnMode != "off" && s.vpnConf.isNotEmpty()) {
-            if (s.vpnMode == "force") row(R.drawable.ic_shield, "VPN", KxVpn.message.ifEmpty { "Attivata dal tuo fornitore" }, "Sempre attiva", null)
+            if (s.vpnMode == "force") row(R.drawable.ic_shield, "VPN", KxVpn.message.ifEmpty { "Attivata dal tuo fornitore" }, "Sempre attiva") {
+                // spenta per un permesso negato o un errore: si riprova
+                if (KxVpn.state != "on") { Vpns.retry(); Vpns.apply(this); App.main.postDelayed({ if (!isFinishing) build() }, 1500) }
+            }
             else if (s.perm("vpn")) row(R.drawable.ic_shield, "VPN", KxVpn.message.ifEmpty { "Protegge la connessione dell'app" }, if (Store.vpnUser) "Attiva" else "Spenta") {
                 Store.vpnUser = !Store.vpnUser
                 if (Store.vpnUser) Vpns.retry()

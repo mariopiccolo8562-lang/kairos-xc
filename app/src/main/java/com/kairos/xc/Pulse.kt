@@ -10,6 +10,9 @@ import org.json.JSONObject
  * - ogni 20 minuti si rilegge lo stato (scadenza, playlist)
  */
 object Pulse {
+    private val lateBeat = Runnable { beat(true) }
+    /** «Disconnetti» da mostrare appena si apre una schermata */
+    @Volatile var pendingKick = false
     class Watch(val state: String, val title: String, val ch: String, val chId: String, val group: String, val pl: String)
 
     @Volatile var watching: Watch? = null
@@ -55,13 +58,21 @@ object Pulse {
         val sig = (w?.state ?: "idle") + "|" + (w?.chId ?: "")
         val now = SystemClock.elapsedRealtime()
         if (!force && sig == lastSig && now - lastHb < (if (w == null) 60_000 else 20_000)) return
-        if (now - lastHb < 15_000) return // il pannello accetta al massimo un battito ogni 15 s
+        if (now - lastHb < 15_000) {
+            // il pannello accetta al massimo un battito ogni 15 s: quello importante (inizio/fine visione) parte appena si può
+            if (force) { App.main.removeCallbacks(lateBeat); App.main.postDelayed(lateBeat, 15_000 - (now - lastHb) + 200) }
+            return
+        }
         lastSig = sig
         lastHb = now
         val screen = App.top?.javaClass?.simpleName?.removeSuffix("Activity")?.lowercase() ?: ""
         val st2 = if (w != null) try { stats?.invoke() } catch (_: Exception) { null } else null
-        bg {
-            val j = Panel.heartbeat(w, kickAck, KxVpn.state == "on", screen, st2) ?: return@bg
+        net {
+            val j = Panel.heartbeat(w, kickAck, KxVpn.state == "on", screen, st2)
+            if (j == null) {
+                if (Panel.hbDenied) { Panel.hbDenied = false; refresh() }
+                return@net
+            }
             handle(j)
         }
     }
@@ -72,7 +83,7 @@ object Pulse {
             kickAck = kick
             if (kick != Store.kickSeen) {
                 Store.kickSeen = kick
-                ui { (App.top as? BaseActivity)?.onKicked() }
+                ui { val a = App.top as? BaseActivity; if (a != null) a.onKicked() else pendingKick = true }
             }
         }
         val s = Panel.state ?: return

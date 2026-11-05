@@ -48,7 +48,7 @@ class LiveActivity : BaseActivity() {
     private var pendingCat: Db.Cat? = null
     private var curRow: Db.Row? = null
     private var curPos = -1
-    private var restoreId = 0L
+    private var restoreK = ""
     private var favSet: Set<String> = emptySet()
     private var seq = 0
     private var loadedSig = ""
@@ -56,7 +56,7 @@ class LiveActivity : BaseActivity() {
     /** appena i canali sono ricaricati (film e serie arrivano dopo) si rilegge, restando sul canale selezionato */
     private val syncL: () -> Unit = {
         val v = Sync.ver("live")
-        if (v != verWas && !isFinishing) { curRow?.let { restoreId = it.l("_id") }; loadCats(refresh = true) }
+        if (v != verWas && !isFinishing) { curRow?.let { restoreK = it.s("k") }; loadCats(refresh = true) }
         verWas = v
     }
 
@@ -95,8 +95,8 @@ class LiveActivity : BaseActivity() {
 
         findViewById<View>(R.id.back).setOnClickListener { finish() }
         findViewById<View>(R.id.search).setOnClickListener { open(SearchActivity::class.java) }
-        findViewById<View>(R.id.watch).setOnClickListener { play(curPos) }
-        favBtn.setOnClickListener { toggleFav(curPos) }
+        findViewById<View>(R.id.watch).setOnClickListener { curRow?.let { playRow(it.l("_id"), it.s("k")) } }
+        favBtn.setOnClickListener { curRow?.let { favKey(it.s("k"), -1) } }
 
         catAdapter = CatAdapter(
             onFocus = { c, _ -> if (c.id != curCat) { pendingCat = c; App.main.removeCallbacks(loadCatR); App.main.postDelayed(loadCatR, 260) } },
@@ -109,7 +109,7 @@ class LiveActivity : BaseActivity() {
         channels.adapter = chAdapter
 
         curCat = intent.getStringExtra("cat") ?: Store.lastLiveCat.ifEmpty { Db.ALL }
-        restoreId = Store.lastLiveId
+        restoreK = Store.lastLiveK
         favSet = Store.favs("live")
         Sync.listen(syncL)
         loadCats()
@@ -118,10 +118,12 @@ class LiveActivity : BaseActivity() {
     override fun onResume() {
         super.onResume()
         favSet = Store.favs("live")
+        // portale o profilo cambiati mentre si guardava (pannello, Impostazioni): elenco del portale giusto
+        if (loadedSig.isNotEmpty() && sig() != loadedSig) { curRow?.let { restoreK = it.s("k") }; loadCats(refresh = true); return }
         chAdapter.notifyDataSetChanged()
     }
 
-    private fun sig() = K.activeIds().joinToString(",") + "|" + K.kids
+    private fun sig() = K.activeIds().joinToString(",") + "|" + K.kids + "|" + Store.profileId
 
     override fun onPause() {
         super.onPause()
@@ -139,7 +141,7 @@ class LiveActivity : BaseActivity() {
 
     // il pannello ha cambiato qualcosa: si ricarica solo se cambiano playlist o profilo, senza spostare la selezione
     override fun onStateChanged() {
-        if (sig() != loadedSig) { curRow?.let { restoreId = it.l("_id") }; loadCats(refresh = true) }
+        if (sig() != loadedSig) { curRow?.let { restoreK = it.s("k") }; loadCats(refresh = true) }
     }
 
     /* ---------------- categorie ---------------- */
@@ -153,7 +155,7 @@ class LiveActivity : BaseActivity() {
             val total = Db.count("live", pls, kids)
             ui {
                 if (isFinishing) return@ui
-                val all = fixedCats(this, "live", total, favs.size) + list
+                val all = fixedCats(this, "live", total, favs.count { f -> pls.any { f.startsWith("$it:") } }) + list
                 var idx = all.indexOfFirst { it.id == curCat }
                 if (idx < 0) { idx = 0; curCat = Db.ALL }
                 catAdapter.set(all, idx)
@@ -176,19 +178,25 @@ class LiveActivity : BaseActivity() {
         val pls = K.activeIds()
         val kids = K.kids
         val favs = Store.favs("live")
-        val want = restoreId
+        val want = restoreK
         val my = ++seq
         bg {
             val cur = Db.live(c.id, pls, kids, favs)
             var at = -1
-            if (want > 0) {
+            if (want.isNotEmpty()) {
                 var n = 0
-                while (cur.moveToNext()) { if (cur.getLong(0) == want) { at = n; break }; n++ }
+                while (cur.moveToNext()) { if (cur.getString(1) == want) { at = n; break }; n++ }
             }
+            // la finestra del cursore si riempie qui, intorno al canale da mostrare (non sul thread dell'interfaccia)
+            try { cur.moveToPosition(at.coerceAtLeast(0)) } catch (_: Exception) {}
             ui {
                 if (isFinishing || my != seq) { cur.close(); return@ui }
                 val hadFocus = channels.hasFocus()
-                if (at < 0 && (changed || focus)) { curPos = -1; curRow = null }
+                val lm = channels.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager
+                val prevFirst = lm?.findFirstVisibleItemPosition() ?: 0
+                val prevFocus = if (hadFocus) channels.focusedChild?.let { channels.getChildAdapterPosition(it) }?.takeIf { it >= 0 } ?: curPos else -1
+                // elenco nuovo: il canale selezionato si rilegge dal cursore nuovo
+                curPos = -1; curRow = null
                 chAdapter.swap(cur)
                 val count = cur.count
                 empty.visibility = if (count == 0) View.VISIBLE else View.GONE
@@ -198,7 +206,10 @@ class LiveActivity : BaseActivity() {
                     else -> "Nessun canale."
                 }
                 when {
-                    at >= 0 -> { restoreId = 0; if (focus || hadFocus || !cats.hasFocus()) focusChannel(at) else channels.scrollToPosition(at) }
+                    at >= 0 -> { restoreK = ""; if (focus || hadFocus || !cats.hasFocus()) { focusChannel(at); onChannelFocus(at) } else channels.scrollToPosition(at) }
+                    // stesso elenco aggiornato in sottofondo: si resta dov'eri, non si torna al canale 1
+                    count > 0 && !changed && !focus && prevFocus >= 0 -> { val p = prevFocus.coerceAtMost(count - 1); focusChannel(p); onChannelFocus(p) }
+                    count > 0 && !changed && !focus -> channels.scrollToPosition(prevFirst.coerceIn(0, count - 1))
                     count > 0 && (focus || hadFocus || (!cats.hasFocus() && currentFocus == null)) -> { channels.scrollToPosition(0); focusChannel(0) }
                     else -> channels.scrollToPosition(0)
                 }
@@ -219,8 +230,7 @@ class LiveActivity : BaseActivity() {
         if (pos == curPos && curRow != null) return
         curPos = pos
         val c = chAdapter.cursor ?: return
-        if (c.isClosed || !c.moveToPosition(pos)) return
-        curRow = Db.current(c)
+        curRow = try { if (c.isClosed || !c.moveToPosition(pos)) return; Db.current(c) } catch (_: Exception) { return }
         stopVideo()
         App.main.removeCallbacks(previewR)
         App.main.postDelayed(previewR, 180)
@@ -229,8 +239,7 @@ class LiveActivity : BaseActivity() {
     /** OK sul canale: la prima volta parte nel riquadro, la seconda si apre a schermo intero */
     private fun onChannelClick(pos: Int) {
         val c = chAdapter.cursor ?: return
-        if (pos < 0 || c.isClosed || !c.moveToPosition(pos)) return
-        val id = c.getLong(0)
+        val id = try { if (pos < 0 || c.isClosed || !c.moveToPosition(pos)) return; c.getLong(0) } catch (_: Exception) { return }
         if (!previewOn() || (previewId > 0 && id == previewId)) { play(pos); return }
         if (pos != curPos || curRow == null) onChannelFocus(pos) // al tocco (telefoni) il canale non prende il focus
         startVideo()
@@ -293,7 +302,7 @@ class LiveActivity : BaseActivity() {
     private fun startVideo() {
         if (!previewOn() || isFinishing) return
         val r = curRow ?: return
-        val url = Play.liveUrls(r).firstOrNull() ?: run { play(curPos); return }
+        val url = Play.liveUrls(r).firstOrNull() ?: run { playRow(r.l("_id"), r.s("k")); return }
         val id = r.l("_id")
         previewId = id
         val my = ++videoSeq
@@ -356,11 +365,15 @@ class LiveActivity : BaseActivity() {
     /* ---------------- azioni ---------------- */
     private fun play(pos: Int) {
         val c = chAdapter.cursor ?: return
-        if (pos < 0 || c.isClosed || !c.moveToPosition(pos)) return
-        val id = c.getLong(0)
+        val (id, k) = try { if (pos < 0 || c.isClosed || !c.moveToPosition(pos)) return; c.getLong(0) to (c.getString(1) ?: "") } catch (_: Exception) { return }
+        playRow(id, k)
+    }
+
+    private fun playRow(id: Long, k: String) {
         stopVideo()
         releaseVideo() // un solo decoder alla volta: l'anteprima si chiude prima dello schermo intero
         Store.lastLiveId = id
+        Store.lastLiveK = k
         @Suppress("DEPRECATION")
         startActivityForResult(Intent(this, PlayerActivity::class.java).putExtra("kind", "live").putExtra("cat", curCat).putExtra("rowId", id), 7)
     }
@@ -368,21 +381,26 @@ class LiveActivity : BaseActivity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == 7 && data != null) {
-            val id = data.getLongExtra("ch", 0)
-            if (id > 0) { restoreId = id; pendingCat = catAdapter.items.find { it.id == curCat }; loadChannels() }
+            val k = data.getStringExtra("chK").orEmpty()
+            if (k.isNotEmpty()) { restoreK = k; pendingCat = catAdapter.items.find { it.id == curCat }; loadChannels() }
         }
     }
 
     private fun toggleFav(pos: Int) {
         val c = chAdapter.cursor ?: return
-        if (pos < 0 || c.isClosed || !c.moveToPosition(pos)) return
-        val k = c.getString(1) ?: return
+        val k = try { if (pos < 0 || c.isClosed || !c.moveToPosition(pos)) return; c.getString(1) ?: return } catch (_: Exception) { return }
+        favKey(k, pos)
+    }
+
+    /** preferito acceso/spento per chiave stabile; [pos] = riga da ridisegnare (-1 = tutte) */
+    private fun favKey(k: String, pos: Int) {
+        if (k.isEmpty()) return
         val on = Store.toggleFav("live", k)
         favSet = Store.favs("live")
-        chAdapter.notifyItemChanged(pos)
-        if (pos == curPos) favBtn.setImageResource(if (on) R.drawable.ic_heart_fill else R.drawable.ic_heart)
+        if (pos >= 0) chAdapter.notifyItemChanged(pos) else chAdapter.notifyDataSetChanged()
+        if (curRow?.s("k") == k) favBtn.setImageResource(if (on) R.drawable.ic_heart_fill else R.drawable.ic_heart)
         Ui.toast(if (on) "Aggiunto ai preferiti" else "Tolto dai preferiti")
-        catAdapter.items.find { it.id == Db.FAV }?.let { it.count = favSet.size; catAdapter.notifyItemChanged(1) }
+        catAdapter.items.find { it.id == Db.FAV }?.let { it.count = Store.favsIn("live", K.activeIds()).size; catAdapter.notifyItemChanged(1) }
         if (curCat == Db.FAV) { pendingCat = catAdapter.items.find { it.id == Db.FAV }; loadChannels() }
     }
 

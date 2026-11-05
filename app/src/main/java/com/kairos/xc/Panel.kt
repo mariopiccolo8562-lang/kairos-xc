@@ -147,6 +147,8 @@ class State(
 
 object Panel {
     @Volatile var state: State? = null
+    /** l'ultimo battito è stato rifiutato (403): va riletto lo stato */
+    @Volatile var hbDenied = false
 
     class Err(msg: String) : Exception(msg)
 
@@ -159,7 +161,15 @@ object Panel {
 
     private fun post(path: String, body: JSONObject, connectMs: Int = 12_000, readMs: Int = 20_000): Pair<Int, JSONObject?> {
         if (base.isEmpty()) throw Err("Server non configurato")
-        val r = try { Http.text(base + path, "POST", body.toString(), connectMs, readMs) } catch (e: Exception) { throw Err("Impossibile raggiungere il server") }
+        val r = try { Http.text(base + path, "POST", body.toString(), connectMs, readMs) } catch (e: Exception) {
+            // il pannello aveva indicato un indirizzo nuovo che non risponde: si riprova con quello dell'app
+            val home = BuildConfig.SERVER_URL.trimEnd('/')
+            if (home.isNotEmpty() && home != base) {
+                val r2 = try { Http.text(home + path, "POST", body.toString(), connectMs, readMs) } catch (_: Exception) { null }
+                if (r2 != null && r2.code < 500) { Store.server = home; return r2.code to (try { JSONObject(r2.text) } catch (_: Exception) { null }) }
+            }
+            throw Err("Impossibile raggiungere il server")
+        }
         val j = try { JSONObject(r.text) } catch (_: Exception) { null }
         return r.code to j
     }
@@ -181,7 +191,11 @@ object Panel {
         val s = State.parse(j)
         // il pannello può indicare un nuovo indirizzo per sé stesso (Impostazioni → server)
         val mv = s.setting("serverUrl").trimEnd('/')
-        if (mv.startsWith("https://") && mv != base) Store.server = mv
+        if (mv.startsWith("https://") && mv != base) {
+            // si passa al nuovo indirizzo solo se risponde davvero (un errore di battitura non blocca tutte le TV)
+            val ok = try { Http.text("$mv/api/player/ping", connectMs = 8_000, readMs = 8_000).code == 200 } catch (_: Exception) { false }
+            if (ok) Store.server = mv
+        }
         // nella copia salvata resta solo la modalità VPN, mai la configurazione (solo in memoria)
         val cache = JSONObject(j.toString())
         cache.remove("vpn")
@@ -202,7 +216,12 @@ object Panel {
         // diagnostica in «Online ora»: codec, decodifica, blocchi, fotogrammi persi, qualità ridotta
         if (stats != null) b.put("stats", stats)
         if (kickAck > 0) b.put("kickAck", kickAck)
-        return try { val (c, j) = post("/api/player/heartbeat", b); if (c == 200) j else null } catch (_: Exception) { null }
+        return try {
+            val (c, j) = post("/api/player/heartbeat", b)
+            // dispositivo eliminato o non più riconosciuto dal pannello: si rilegge subito lo stato
+            if (c == 401 || c == 403) hbDenied = true
+            if (c == 200) j else null
+        } catch (_: Exception) { null }
     }
 
     /** limite di visioni contemporanee: null = si può guardare, altrimenti il messaggio */
@@ -286,6 +305,7 @@ object Panel {
 
 object K {
     fun profile(): Profile? {
+        if (!profilesOn()) return null
         val a = Panel.state?.account ?: return null
         val id = Store.profileId
         return a.profiles.find { it.id == id }

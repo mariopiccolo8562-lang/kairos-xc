@@ -43,6 +43,10 @@ class App : Application() {
                 .setDefaultRequestOptions(RequestOptions().format(if (lite) DecodeFormat.PREFER_RGB_565 else DecodeFormat.PREFER_ARGB_8888))
                 .setLogLevel(android.util.Log.ERROR))
         } catch (_: Throwable) {}
+        // file dell'aggiornamento già installato: via, le chiavette hanno poco spazio
+        bg {
+            for (d in listOfNotNull(java.io.File(cacheDir, "apk"), externalCacheDir)) java.io.File(d, "kairos-xc-update.apk").takeIf { it.exists() }?.delete()
+        }
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             override fun onActivityCreated(a: Activity, b: Bundle?) {}
             override fun onActivityStarted(a: Activity) {

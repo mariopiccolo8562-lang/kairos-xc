@@ -29,6 +29,8 @@ object Epg {
     fun get(p: Playlist?, sid: String, limit: Int = 4): List<Prog> {
         if (p == null || sid.isEmpty()) return emptyList()
         cached(p, sid, limit)?.let { if (it.isNotEmpty()) return it }
+        // guida assente per questo canale: non si richiede di nuovo a ogni cambio canale (10 minuti)
+        cache.get(p.id + ":" + sid + ":" + limit)?.let { if (it.list.isEmpty() && System.currentTimeMillis() - it.t < 10 * 60_000L) return emptyList() }
         val url = p.api("get_short_epg", "&stream_id=$sid&limit=$limit") ?: return emptyList()
         val list = try {
             val r = Http.text(url, connectMs = 10_000, readMs = 15_000)

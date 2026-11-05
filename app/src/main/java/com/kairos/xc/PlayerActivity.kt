@@ -53,6 +53,12 @@ object Play {
         val p = K.pl(o.optString("pl"))
         if (p == null) { Ui.toast("Questo contenuto non è più nella tua playlist"); return }
         val kind = o.optString("kind", "movie")
+        // serie: si passa dalla scheda, così riparte l'episodio giusto e i successivi vanno in coda da soli
+        val group = o.optString("group")
+        if (kind == "series" && group.isNotEmpty()) {
+            a.startActivity(Intent(a, DetailActivity::class.java).putExtra("table", "series").putExtra("k", group).putExtra("autoplay", true))
+            return
+        }
         val sid = o.optString("sid")
         val stored = o.optString("url")
         val url = when {
@@ -75,6 +81,8 @@ class PlayerActivity : BaseActivity() {
     companion object {
         /** dopo un calo della linea, per 10 minuti i canali partono già nella versione più leggera */
         @Volatile var lighterUntil = 0L
+        /** per ogni portale l'ultimo formato che ha funzionato (0 = m3u8, 1 = ts) */
+        val fmtPref = java.util.concurrent.ConcurrentHashMap<String, Int>()
     }
 
     private lateinit var pv: PlayerView
@@ -165,6 +173,34 @@ class PlayerActivity : BaseActivity() {
     private val tuneR = Runnable { if (ids.isNotEmpty()) tune(ids[idx]) }
     private val zapR = Runnable { commitZap() }
     private val retryR = Runnable { startUrl() }
+    /** rete assente: si aspetta che torni e si riparte da soli */
+    private val netWaitR = object : Runnable {
+        override fun run() {
+            if (isFinishing || blocked || player == null) return
+            if (Net.type() == "none") { App.main.postDelayed(this, 3_000); return }
+            msg.visibility = View.GONE
+            notice("Connessione tornata, riprendo…")
+            gaveUp = false
+            startUrl()
+        }
+    }
+    /** dopo «non risponde»: nuovo tentativo automatico ogni 30 s (al massimo 10 volte) */
+    private var giveUps = 0
+    private val giveUpR = Runnable {
+        if (!isFinishing && !blocked && gaveUp && player != null && giveUps < 10) {
+            giveUps++
+            step = 0; lastKind = ""
+            msg.visibility = View.GONE
+            spin.visibility = View.VISIBLE
+            startUrl()
+        }
+    }
+    /** il pannello ha chiuso la visione: niente più riproduzione in questa schermata */
+    private var kicked = false
+    /** tentativi con l'altro formato dopo un «non trovato» del server, per questo canale */
+    private var altTried = 0
+    /** HLS senza estensione nell'indirizzo: si riprova dicendo a ExoPlayer che è HLS */
+    private var forceHls = false
     private val tickR = object : Runnable {
         override fun run() {
             updateTime()
@@ -255,6 +291,8 @@ class PlayerActivity : BaseActivity() {
         super.onStop()
         App.main.removeCallbacks(tickR)
         App.main.removeCallbacks(retryR)
+        App.main.removeCallbacks(netWaitR)
+        App.main.removeCallbacks(giveUpR)
         App.main.removeCallbacks(tuneR)
         if (!live) {
             savePos(true)
@@ -275,6 +313,8 @@ class PlayerActivity : BaseActivity() {
         App.main.removeCallbacks(tuneR)
         App.main.removeCallbacks(zapR)
         App.main.removeCallbacks(retryR)
+        App.main.removeCallbacks(netWaitR)
+        App.main.removeCallbacks(giveUpR)
         sendEvents()
     }
 
@@ -303,12 +343,22 @@ class PlayerActivity : BaseActivity() {
     }
 
     override fun onKicked() {
+        kicked = true
         blocked = true
+        App.main.removeCallbacks(giveUpR)
+        App.main.removeCallbacks(netWaitR)
         App.main.removeCallbacks(retryR)
         App.main.removeCallbacks(tuneR)
         player?.stop()
         Pulse.watch(null)
-        Ui.dialog(this, "Visione interrotta", "Il tuo fornitore ha chiuso la visione su questo dispositivo.") { finish() }
+        try {
+            android.app.AlertDialog.Builder(this).setTitle("Visione interrotta")
+                .setMessage("Il tuo fornitore ha chiuso la visione su questo dispositivo.")
+                .setCancelable(false)
+                .setPositiveButton("OK") { _, _ -> finish() }
+                .setOnDismissListener { if (!isFinishing) finish() }
+                .show()
+        } catch (_: Exception) { finish() }
     }
 
     /* ---------------- eventi del lettore ---------------- */
@@ -323,7 +373,9 @@ class PlayerActivity : BaseActivity() {
                     seeking = false
                     firstReady = true
                     reconnects = 0
+                    giveUps = 0
                     bufferingSince = 0L
+                    if (live) row?.s("pl")?.let { fmtPref[it] = urlIdx }
                 }
                 Player.STATE_ENDED -> {
                     bufferingSince = 0L
@@ -355,6 +407,28 @@ class PlayerActivity : BaseActivity() {
                 seeking = true
                 p.seekToDefaultPosition()
                 p.prepare()
+                return
+            }
+            val code = error.errorCode
+            // rete assente (Wi-Fi caduto): non si consumano i rimedi, si aspetta che torni
+            if (code in 2000..2999 && Net.type() == "none") {
+                spin.visibility = View.GONE
+                showMsg("Connessione assente.\nLa visione riprende da sola appena torna la rete.")
+                App.main.removeCallbacks(netWaitR)
+                App.main.postDelayed(netWaitR, 3_000)
+                return
+            }
+            // il server non ha questo formato (es. m3u8 non abilitato): subito l'altro, senza attese
+            if (live && (code == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS || code == PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND) && urls.size > 1 && altTried < urls.size - 1) {
+                altTried++
+                urlIdx = (urlIdx + 1) % urls.size
+                startUrl()
+                return
+            }
+            // indirizzo senza estensione che in realtà è HLS: si riprova una volta come HLS
+            if (!forceHls && (code == PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED || code == PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED)) {
+                forceHls = true
+                startUrl(if (live) null else p.currentPosition)
                 return
             }
             // 4000-4999 = errori del decoder (lì serve la decodifica software), il resto è rete o formato
@@ -486,7 +560,9 @@ class PlayerActivity : BaseActivity() {
         spin.visibility = View.GONE
         App.main.removeCallbacks(retryR)
         try { p.stop() } catch (_: Exception) {}
-        showMsg(if (live) "Il canale non risponde in questo momento.\nProva più tardi o scegli un altro canale." else "Il contenuto non si apre ($err).\nRiprova più tardi.")
+        showMsg(if (live) "Il canale non risponde in questo momento.\nRiprovo da solo tra poco, oppure scegli un altro canale." else "Il contenuto non si apre ($err).\nRiprovo da solo tra poco, oppure premi OK.")
+        App.main.removeCallbacks(giveUpR)
+        if (giveUps < 10) App.main.postDelayed(giveUpR, 30_000)
     }
 
     private fun applyFix(a: String): Boolean = when (a) {
@@ -520,8 +596,10 @@ class PlayerActivity : BaseActivity() {
         if (soft == on) return
         soft = on
         if (player == null) return
+        val keep = try { player?.trackSelectionParameters } catch (_: Exception) { null }
         releasePlayer()
         newPlayer()
+        if (keep != null) try { player?.trackSelectionParameters = keep } catch (_: Exception) {}
         if (restart) startUrl(pos)
     }
 
@@ -529,7 +607,7 @@ class PlayerActivity : BaseActivity() {
         if (events.length() == 0) return
         val e = JSONArray(events.toString())
         while (events.length() > 0) events.remove(0)
-        bg { Panel.errors(e) }
+        net { Panel.errors(e) }
     }
 
     /** versione più leggera dello stesso canale (mai una HEVC come ripiego di un canale che non lo è) */
@@ -629,7 +707,7 @@ class PlayerActivity : BaseActivity() {
 
     /** [variant] = un'altra versione dello stesso canale (qualità adattiva), non un cambio canale */
     private fun tune(id: Long, variant: Boolean = false) {
-        if (id <= 0) return
+        if (id <= 0 || kicked) return
         if (!variant) {
             closeProblem() // problema del canale di prima: il cliente è passato oltre
             setSoft(false, null)
@@ -644,7 +722,11 @@ class PlayerActivity : BaseActivity() {
         val capped = !variant && App.max
         val keepVariants = variants
         bg {
-            val r0 = Db.one("live", id) ?: return@bg
+            val r0 = Db.one("live", id) ?: run {
+                // le liste sono state aggiornate e questo numero non esiste più: si rilegge l'elenco dei canali
+                ui { if (my == tuneSeq && !isFinishing) { spin.visibility = View.GONE; showMsg("Canale non più disponibile: elenco aggiornato, scegline un altro."); loadIds() } }
+                return@bg
+            }
             val vars = if (variant) keepVariants else try { Db.variants(r0) } catch (_: Exception) { emptyList() }
             var r = r0
             var startReduced = false
@@ -676,8 +758,14 @@ class PlayerActivity : BaseActivity() {
                 }
                 row = r
                 urls = list
-                urlIdx = 0
+                // formato che ha funzionato l'ultima volta su questo portale (m3u8 o ts): si parte da quello
+                urlIdx = (fmtPref[r.s("pl")] ?: 0).coerceIn(0, (list.size - 1).coerceAtLeast(0))
+                altTried = 0
+                forceHls = false
+                giveUps = 0
+                App.main.removeCallbacks(giveUpR)
                 Store.lastLiveId = curId
+                Store.lastLiveK = r0.s("k")
                 showLiveInfo(baseRow ?: r)
                 blocked = block != null
                 if (block != null) { player?.stop(); spin.visibility = View.GONE; showMsg(block); return@ui }
@@ -693,14 +781,14 @@ class PlayerActivity : BaseActivity() {
 
     private fun startUrl(pos: Long? = null) {
         val p = player ?: return
-        if (blocked) return
+        if (blocked || kicked) return
         val u = if (live) urls.getOrNull(urlIdx) else vodUrl
         if (u.isNullOrEmpty()) return
         bufferingSince = mono() // il tempo di avvio si conta da qui (il lettore può restare in caricamento)
         firstReady = false
         gaveUp = false
         // film: si riparte dal punto in cui si era (un errore di rete non fa ricominciare da capo)
-        if (live) p.setMediaItem(Players.item(u)) else p.setMediaItem(Players.item(u), maxOf(pos ?: p.currentPosition, 0L))
+        if (live) p.setMediaItem(Players.item(u, forceHls)) else p.setMediaItem(Players.item(u, forceHls), maxOf(pos ?: p.currentPosition, 0L))
         p.prepare()
         p.playWhenReady = true
     }
@@ -718,7 +806,7 @@ class PlayerActivity : BaseActivity() {
         val p = K.pl(r.s("pl"))
         val sid = r.s("sid")
         if (p?.xt == null || sid.isEmpty()) return
-        bg {
+        net {
             val list = Epg.get(p, sid, 3)
             ui {
                 if (r.l("_id") != curId) return@ui // stesso canale anche se è cambiata la versione
@@ -778,6 +866,7 @@ class PlayerActivity : BaseActivity() {
 
     /* ---------------- film ed episodi ---------------- */
     private fun startVod() {
+        if (kicked) return
         nameV.text = vodTitle
         subV.text = vodSub
         val st = kind
@@ -814,7 +903,7 @@ class PlayerActivity : BaseActivity() {
         if (dur <= 0 || dur == C.TIME_UNSET || vodId.isEmpty()) return
         if (pos > dur * 95 / 100) {
             Store.setPosition(vodId, 0)
-            Store.removeRecent(vodId)
+            finishedRecent()
             return
         }
         if (pos < 15_000) return
@@ -822,11 +911,21 @@ class PlayerActivity : BaseActivity() {
         recent?.let { Store.saveRecent(JSONObject(it.toString()).put("pos", pos).put("dur", dur)) }
     }
 
+    /**
+     * Film o episodio finito (o ai titoli di coda): il film esce da «Continua a guardare»,
+     * la serie invece resta con l'episodio successivo, pronto da far partire.
+     */
+    private fun finishedRecent() {
+        val next = queue.optJSONObject(0)?.optJSONObject("recent")
+        if (kind == "series" && next != null) Store.saveRecent(JSONObject(next.toString()).put("pos", 0L).put("dur", 0L))
+        else Store.removeRecent(vodId)
+    }
+
     private fun onEnded() {
         closeProblem()
         dropped = 0
         Store.setPosition(vodId, 0)
-        Store.removeRecent(vodId)
+        finishedRecent()
         if (queue.length() == 0) { finish(); return }
         val n = queue.optJSONObject(0) ?: run { finish(); return }
         val rest = JSONArray()
@@ -854,7 +953,7 @@ class PlayerActivity : BaseActivity() {
 
     private fun togglePlay() {
         val p = player ?: return
-        if (live && !p.isPlaying && p.playbackState == Player.STATE_IDLE) { startUrl(); return }
+        if (!p.isPlaying && p.playbackState == Player.STATE_IDLE) { msg.visibility = View.GONE; App.main.removeCallbacks(giveUpR); giveUps = 0; startUrl(); return }
         p.playWhenReady = !p.playWhenReady
     }
 
@@ -1013,7 +1112,7 @@ class PlayerActivity : BaseActivity() {
 
     /** si torna alla lista canali posizionati sul canale guardato */
     private fun leave() {
-        if (live) setResult(RESULT_OK, Intent().putExtra("ch", curId))
+        if (live) setResult(RESULT_OK, Intent().putExtra("ch", curId).putExtra("chK", baseRow?.s("k") ?: ""))
         finish()
     }
 

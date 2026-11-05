@@ -90,11 +90,21 @@ class VodActivity : BaseActivity() {
         loadCats()
     }
 
-    private fun sig() = K.activeIds().joinToString(",") + "|" + K.kids
+    private fun sig() = K.activeIds().joinToString(",") + "|" + K.kids + "|" + Store.profileId
 
     override fun onResume() {
         super.onResume()
+        val before = favSet
         favSet = Store.favs(table)
+        when {
+            // portale o profilo cambiati nel frattempo
+            loadedSig.isNotEmpty() && sig() != loadedSig -> loadCats(refresh = true)
+            // tolto/aggiunto un preferito dalla scheda: la griglia Preferiti e il conteggio si aggiornano
+            before != favSet -> {
+                catAdapter.items.find { it.id == Db.FAV }?.let { it.count = Store.favsIn(table, K.activeIds()).size; catAdapter.notifyItemChanged(1) }
+                if (curCat == Db.FAV) { pendingCat = catAdapter.items.find { it.id == Db.FAV }; load(keep = true) }
+            }
+        }
     }
 
     override fun onDestroy() {
@@ -116,7 +126,7 @@ class VodActivity : BaseActivity() {
             val total = Db.count(table, pls, kids)
             ui {
                 if (isFinishing) return@ui
-                val all = fixedCats(this, table, total, favs.size) + list
+                val all = fixedCats(this, table, total, favs.count { f -> pls.any { f.startsWith("$it:") } }) + list
                 var idx = all.indexOfFirst { it.id == curCat }
                 if (idx < 0) idx = 0
                 catAdapter.set(all, idx)
@@ -163,19 +173,18 @@ class VodActivity : BaseActivity() {
 
     private fun openAt(pos: Int) {
         val c = posters.cursor ?: return
-        if (pos < 0 || c.isClosed || !c.moveToPosition(pos)) return
-        val id = c.getLong(0)
-        open(DetailActivity::class.java) { putExtra("table", table); putExtra("id", id) }
+        if (pos < 0 || c.isClosed) return
+        val (id, k) = try { if (!c.moveToPosition(pos)) return; c.getLong(0) to (c.getString(1) ?: "") } catch (_: Exception) { return }
+        open(DetailActivity::class.java) { putExtra("table", table); putExtra("id", id); putExtra("k", k) }
     }
 
     private fun toggleFav(pos: Int) {
         val c = posters.cursor ?: return
-        if (pos < 0 || c.isClosed || !c.moveToPosition(pos)) return
-        val k = c.getString(1) ?: return
+        val k = try { if (pos < 0 || c.isClosed || !c.moveToPosition(pos)) return; c.getString(1) ?: return } catch (_: Exception) { return }
         val on = Store.toggleFav(table, k)
         favSet = Store.favs(table)
         Ui.toast(if (on) "Aggiunto ai preferiti" else "Tolto dai preferiti")
-        catAdapter.items.find { it.id == Db.FAV }?.let { it.count = favSet.size; catAdapter.notifyItemChanged(1) }
+        catAdapter.items.find { it.id == Db.FAV }?.let { it.count = Store.favsIn(table, K.activeIds()).size; catAdapter.notifyItemChanged(1) }
         if (curCat == Db.FAV) { pendingCat = catAdapter.items.find { it.id == Db.FAV }; load() }
     }
 

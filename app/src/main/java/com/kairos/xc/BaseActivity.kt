@@ -23,6 +23,7 @@ abstract class BaseActivity : Activity() {
         super.onCreate(savedInstanceState)
         // dopo una chiusura forzata di Android (poca memoria) si riparte dall'ultimo stato salvato
         if (Panel.state == null) Panel.loadCached()
+        Vpns.forgetAsk()
         if (App.lite) overridePendingTransition(0, 0)
     }
 
@@ -34,6 +35,8 @@ abstract class BaseActivity : Activity() {
             Vpns.apply(this)
         }
         if (clockView != null) { App.main.removeCallbacks(clockTick); clockTick.run() }
+        // «Disconnetti» arrivato mentre si passava da una schermata all'altra
+        if (Pulse.pendingKick) { Pulse.pendingKick = false; onKicked() }
         Updater.offer(this) // versione nuova trovata mentre si guardava un canale: la si propone qui
     }
 

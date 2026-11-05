@@ -158,7 +158,12 @@ class HomeActivity : BaseActivity() {
 
     private fun toggleVpn() {
         val s = Panel.state ?: return
-        if (s.vpnMode == "force") { Ui.toast(KxVpn.message.ifEmpty { "VPN sempre attiva, impostata dal tuo fornitore" }); return }
+        if (s.vpnMode == "force") {
+            // «sempre attiva»: se è spenta (permesso negato o errore) la si richiede di nuovo
+            if (KxVpn.state != "on") { Vpns.retry(); Vpns.apply(this); Ui.toast("VPN in attivazione…") }
+            else Ui.toast("VPN sempre attiva, impostata dal tuo fornitore")
+            return
+        }
         Store.vpnUser = !Store.vpnUser
         if (Store.vpnUser) Vpns.retry()
         Vpns.apply(this)

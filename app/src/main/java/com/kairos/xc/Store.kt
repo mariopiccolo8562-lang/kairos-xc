@@ -106,6 +106,12 @@ object Store {
     var lastLiveCat: String
         get() = s("liveCat")
         set(v) = put("liveCat", v)
+    /** ultimo canale guardato, per chiave stabile (portale:numero) */
+    var lastLiveK: String
+        get() = s("liveK")
+        set(v) = put("liveK", v)
+    /** preferiti del portale in uso (le chiavi iniziano con l'id della playlist) */
+    fun favsIn(kind: String, pls: List<String>): Set<String> = favs(kind).filter { f -> pls.any { f.startsWith("$it:") } }.toSet()
     var lastLiveId: Long
         get() = p.getLong("liveId", 0)
         set(v) = p.edit().putLong("liveId", v).apply()

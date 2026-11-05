@@ -108,6 +108,11 @@ object Vpns {
 
     fun retry() { refused = false }
 
+    /** nuova schermata: una richiesta di permesso rimasta senza risposta (schermata chiusa nel frattempo) si può rifare */
+    fun forgetAsk() {
+        if (asked) { asked = false; pending = null; if (KxVpn.state == "connecting") KxVpn.fail("VPN non attivata: riprova") }
+    }
+
     fun wanted(): String? {
         val s = Panel.state ?: return null
         if (!s.active || s.vpnConf.isEmpty()) return null
@@ -121,6 +126,8 @@ object Vpns {
     /** «Sempre attiva»: liste e visione aspettano la VPN (al massimo 6 s). Da chiamare fuori dal thread principale. */
     fun awaitForced() {
         if (Panel.state?.vpnMode != "force") return
+        // configurazione non disponibile (app aperta senza pannello): la VPN non partirà, non si aspetta a vuoto
+        if (wanted() == null) return
         val end = System.currentTimeMillis() + 6_000
         while (System.currentTimeMillis() < end) {
             val st = KxVpn.state
