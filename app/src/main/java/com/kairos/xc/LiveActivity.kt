@@ -69,6 +69,8 @@ class LiveActivity : BaseActivity() {
     private var previewId = 0L
     private var previewK = ""
     private var previewName = ""
+    /** nome sul riquadro mentre l'anteprima va (resta quello del canale in onda) */
+    private var previewLabel = ""
     private var videoSeq = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -263,7 +265,7 @@ class LiveActivity : BaseActivity() {
         if (previewId == 0L) { idleHint(); return }
         val r = curRow
         if (r == null || r.s("k") == previewK) hint(key() + " · schermo intero")
-        else hint("In onda: $previewName  ·  " + key() + " per vedere questo canale")
+        else hint("In onda: $previewName · " + key() + " per cambiare")
     }
 
     private fun key() = if (channels.isInTouchMode) "Tocca" else "OK"
@@ -281,7 +283,7 @@ class LiveActivity : BaseActivity() {
         val r = curRow ?: return
         val name = r.s("name")
         previewHint()
-        pch.text = (if (r.l("num") > 0) r.l("num").toString() + " · " else "") + name
+        pch.text = if (previewId != 0L) previewLabel else (if (r.l("num") > 0) r.l("num").toString() + " · " else "") + name
         Ui.img(plogo, r.s("logo"), Ui.dp(this, 72), Ui.dp(this, 72))
         favBtn.setImageResource(if (favSet.contains(r.s("k"))) R.drawable.ic_heart_fill else R.drawable.ic_heart)
         nowTitle.text = name
@@ -324,10 +326,13 @@ class LiveActivity : BaseActivity() {
         if (!previewOn() || isFinishing) return
         val r = curRow ?: return
         val url = Play.liveUrls(r).firstOrNull() ?: run { playRow(r.l("_id"), r.s("k")); return }
+        // canale diverso già in anteprima: si chiude prima (un decoder e una visione alla volta per il pannello)
+        if (previewId != 0L) stopVideo()
         val id = r.l("_id")
         previewId = id
         previewK = r.s("k")
         previewName = r.s("name")
+        previewLabel = (if (r.l("num") > 0) r.l("num").toString() + " · " else "") + r.s("name")
         val my = ++videoSeq
         pspin.visibility = View.VISIBLE
         hint(key() + " · schermo intero")
@@ -355,6 +360,9 @@ class LiveActivity : BaseActivity() {
                         // il riquadro non insiste: lo schermo intero ha il recupero automatico completo
                         override fun onPlayerError(error: PlaybackException) {
                             try { pl.stop() } catch (_: Exception) {}
+                            // niente più in onda: il pannello e la scritta sul riquadro lo sanno
+                            if (previewId != 0L) Pulse.watch(null)
+                            previewId = 0
                             pview?.visibility = View.INVISIBLE
                             pspin.visibility = View.GONE
                             hint("Anteprima non disponibile · " + key() + ": schermo intero")
@@ -378,6 +386,8 @@ class LiveActivity : BaseActivity() {
         pview?.visibility = View.INVISIBLE
         pspin.visibility = View.GONE
         idleHint()
+        // sul riquadro torna il nome del canale selezionato
+        curRow?.let { pch.text = (if (it.l("num") > 0) it.l("num").toString() + " · " else "") + it.s("name") }
     }
 
     private fun releaseVideo() {

@@ -81,6 +81,7 @@ class PlayerActivity : BaseActivity() {
     companion object {
         /** dopo un calo della linea, per 10 minuti i canali partono già nella versione più leggera */
         @Volatile var lighterUntil = 0L
+        @Volatile var reducedNoticed = false
         /** per ogni portale l'ultimo formato che ha funzionato (0 = m3u8, 1 = ts) */
         val fmtPref = java.util.concurrent.ConcurrentHashMap<String, Int>()
     }
@@ -780,7 +781,8 @@ class PlayerActivity : BaseActivity() {
                     tryingFull = false
                     stalls.clear()
                     progs = emptyList()
-                    if (startReduced) notice("Qualità ridotta per la tua connessione", 4_000)
+                    // l'avviso si dà una volta sola, non a ogni cambio canale
+                    if (startReduced && !reducedNoticed) { reducedNoticed = true; notice("Qualità ridotta per la tua connessione", 4_000) }
                 }
                 row = r
                 urls = list
