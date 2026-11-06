@@ -334,11 +334,12 @@ class LiveActivity : BaseActivity() {
     private fun startVideo() {
         if (!previewOn() || isFinishing) return
         val r = curRow ?: return
-        val url = Play.liveUrls(r).firstOrNull() ?: run { playRow(r.l("_id"), r.s("k")); return }
+        val full = Play.liveUrls(r).firstOrNull() ?: run { playRow(r.l("_id"), r.s("k")); return }
         // canale diverso già in anteprima: si chiude prima (un decoder e una visione alla volta per il pannello)
         if (previewId != 0L) stopVideo()
         val id = r.l("_id")
         previewId = id
+        Players.previewing = true // niente lavori di fondo (liste, APK) finché il riquadro va
         previewK = r.s("k")
         previewName = r.s("name")
         previewLabel = (if (r.l("num") > 0) r.l("num").toString() + " · " else "") + r.s("name")
@@ -346,13 +347,16 @@ class LiveActivity : BaseActivity() {
         pspin.visibility = View.VISIBLE
         hint(key() + " · schermo intero")
         net {
+            // sempre la versione più leggera dello stesso canale, se la playlist ne ha (niente HEVC: pesa di più da decodificare)
+            val light = try { Db.variants(r).filter { !it.hevc && it.q < Quality.rank(r.s("name")) }.minByOrNull { it.q } } catch (_: Exception) { null }
+            val url = light?.let { Db.one("live", it.id) }?.let { Play.liveUrls(it).firstOrNull() } ?: full
             Vpns.awaitForced() // VPN «sempre attiva»: anche l'anteprima passa dalla VPN
             if (my != videoSeq) return@net // nel frattempo si è passati a un altro canale
             // limite di visioni contemporanee del pannello: l'anteprima è una visione come le altre
             val block = Panel.stream("live", r.s("name"))
             ui {
                 if (isFinishing || my != videoSeq || previewK != r.s("k")) return@ui
-                if (block != null) { previewId = 0; pspin.visibility = View.GONE; idleHint(); Ui.toast(block); return@ui }
+                if (block != null) { previewId = 0; Players.previewing = false; pspin.visibility = View.GONE; idleHint(); Ui.toast(block); return@ui }
                 val p = player ?: Players.build(this, true, preview = true).also { pl ->
                     player = pl
                     val v = PlayerView(this)
@@ -372,6 +376,7 @@ class LiveActivity : BaseActivity() {
                             // niente più in onda: il pannello e la scritta sul riquadro lo sanno
                             if (previewId != 0L) Pulse.watch(null)
                             previewId = 0
+                            Players.previewing = false
                             pview?.visibility = View.INVISIBLE
                             pspin.visibility = View.GONE
                             hint("Anteprima non disponibile · " + key() + ": schermo intero")
@@ -391,6 +396,7 @@ class LiveActivity : BaseActivity() {
         videoSeq++
         if (previewId != 0L) Pulse.watch(null)
         previewId = 0
+        Players.previewing = false
         player?.let { try { it.stop(); it.clearMediaItems() } catch (_: Exception) {} }
         pview?.visibility = View.INVISIBLE
         pspin.visibility = View.GONE

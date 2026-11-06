@@ -108,13 +108,18 @@ object Store {
     var plChoice: String
         get() = s("plChoice")
         set(v) = put("plChoice", v)
-    /** qualità della linea imparata (vedi Net.line) */
-    var line: Int
-        get() = p.getInt("lineQ", 0)
-        set(v) = p.edit().putInt("lineQ", v).apply()
-    var lineAt: Long
-        get() = p.getLong("lineAt", 0)
-        set(v) = p.edit().putLong("lineAt", v).apply()
+    /* ---------------- Kairos Adaptive (vedi Line) ---------------- */
+    /** classe del dispositivo D / N / O, calcolata una volta */
+    var devCls: String
+        get() = s("devCls")
+        set(v) = put("devCls", v)
+    /** classe della linea (weak / normal / good), data del giudizio e banda misurata in bit/s */
+    val lineCls: String get() = s("lineCls")
+    val lineAt: Long get() = p.getLong("lineAt", 0)
+    val bw: Long get() = p.getLong("bw", 0)
+    fun saveLine(cls: String, at: Long, bw: Long) {
+        p.edit().putString("lineCls", cls).putLong("lineAt", at).putLong("bw", bw).apply()
+    }
     /** portale usato prima di quello attuale: le sue liste restano sul disco, per tornarci al volo */
     var plPrev: String
         get() = s("plPrev")

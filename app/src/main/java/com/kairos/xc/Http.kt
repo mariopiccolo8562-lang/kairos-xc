@@ -66,27 +66,8 @@ object Http {
     }
 }
 
+/** rete del dispositivo; la qualità della linea imparata dalla visione è in [Line] (Adaptive.kt) */
 object Net {
-    /**
-     * Qualità della linea imparata dalla visione: 0 = buona, 1 = media, 2 = debole.
-     * Peggiora con i blocchi, migliora dopo 20 minuti di visione senza blocchi. Decide quanto video
-     * tenere in memoria prima di partire e la qualità di partenza: meno rotelline sulle linee lente,
-     * avvio più rapido su quelle buone.
-     */
-    @Volatile private var lineAt = -1L
-    @Volatile var line: Int = -1
-        get() {
-            if (field < 0) { field = Store.line; lineAt = Store.lineAt }
-            // giudizio vecchio di oltre 12 ore (es. una serata con la rete lenta): un gradino più su
-            // (controllato a ogni lettura: sulle Fire TV l'app resta aperta anche per giorni)
-            if (field > 0 && System.currentTimeMillis() - lineAt > 12 * 3600_000L) line = field - 1
-            return field
-        }
-        private set(v) { field = v; lineAt = System.currentTimeMillis(); Store.line = v; Store.lineAt = lineAt }
-
-    fun lineWorse() { val v = (line + 1).coerceAtMost(2); if (v != line) line = v }
-    fun lineBetter() { val v = (line - 1).coerceAtLeast(0); if (v != line) line = v }
-
     /** potenza del Wi-Fi (dBm) per la diagnostica del pannello; 0 se non si sa */
     @Suppress("DEPRECATION")
     fun rssi(): Int = try {

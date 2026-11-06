@@ -102,11 +102,17 @@ object Sync {
             val failed = HashSet<String>()
             val myIds = pls.map { it.id }
             var aborted = false
+            // primo caricamento di questo portale: i canali servono subito; tutto il resto aspetta la fine della visione
+            val firstLoad = !Db.hasData(myIds)
             jobs.forEachIndexed { n, (i, part) ->
                 // portale cambiato durante lo scaricamento: si lascia perdere questo e si passa subito al nuovo
                 if (aborted || K.activeIds() != myIds) { aborted = true; return@forEachIndexed }
                 val p = pls[i]
                 if (failed.contains(p.id)) return@forEachIndexed // server che non risponde: non si insiste
+                if (part != "live" || !firstLoad) {
+                    awaitNoPlayer()
+                    if (K.activeIds() != myIds) { aborted = true; return@forEachIndexed }
+                }
                 val from = n * 100 / jobs.size
                 val span = 100 / jobs.size
                 val step = { v: Int -> setPct(from + v * span / 100) }
@@ -151,6 +157,17 @@ object Sync {
             // nel frattempo è stato scelto un altro portale: si scaricano subito le sue liste (mai lo stesso di nuovo)
             val done = pls.map { it.id }
             ui { if (K.activeIds() != done) start() }
+        }
+    }
+
+    /**
+     * Niente scaricamenti pesanti (decine di MB) mentre un lettore è attivo, a schermo intero o nel riquadro:
+     * si aspetta la chiusura della visione (controllo ogni 3 s, al massimo 30 minuti), poi si riparte.
+     */
+    private fun awaitNoPlayer() {
+        val until = System.currentTimeMillis() + 30 * 60_000L
+        while ((App.top is PlayerActivity || Players.previewing) && System.currentTimeMillis() < until) {
+            try { Thread.sleep(3_000) } catch (_: InterruptedException) { return }
         }
     }
 
