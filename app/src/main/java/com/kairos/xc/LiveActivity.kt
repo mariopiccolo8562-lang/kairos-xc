@@ -99,6 +99,7 @@ class LiveActivity : BaseActivity() {
 
         findViewById<View>(R.id.back).setOnClickListener { finish() }
         findViewById<View>(R.id.search).setOnClickListener { open(SearchActivity::class.java) }
+        vpnShield(findViewById(R.id.vpnShield))
         findViewById<View>(R.id.watch).setOnClickListener { curRow?.let { playRow(it.l("_id"), it.s("k")) } }
         favBtn.setOnClickListener { curRow?.let { favKey(it.s("k"), -1) } }
 
