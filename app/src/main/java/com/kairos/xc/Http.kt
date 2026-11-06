@@ -67,6 +67,27 @@ object Http {
 }
 
 object Net {
+    /**
+     * Qualità della linea imparata dalla visione: 0 = buona, 1 = media, 2 = debole.
+     * Peggiora con i blocchi, migliora dopo 20 minuti di visione senza blocchi. Decide quanto video
+     * tenere in memoria prima di partire e la qualità di partenza: meno rotelline sulle linee lente,
+     * avvio più rapido su quelle buone.
+     */
+    @Volatile var line: Int = -1
+        get() {
+            if (field < 0) {
+                // giudizio vecchio di oltre 12 ore (es. una serata con la rete lenta): si riparte un gradino più su
+                var v = Store.line
+                if (v > 0 && System.currentTimeMillis() - Store.lineAt > 12 * 3600_000L) { v--; Store.line = v; Store.lineAt = System.currentTimeMillis() }
+                field = v
+            }
+            return field
+        }
+        private set
+
+    fun lineWorse() { val v = (line + 1).coerceAtMost(2); if (v != line) { line = v; Store.line = v; Store.lineAt = System.currentTimeMillis() } }
+    fun lineBetter() { val v = (line - 1).coerceAtLeast(0); if (v != line) { line = v; Store.line = v; Store.lineAt = System.currentTimeMillis() } }
+
     /** potenza del Wi-Fi (dBm) per la diagnostica del pannello; 0 se non si sa */
     @Suppress("DEPRECATION")
     fun rssi(): Int = try {

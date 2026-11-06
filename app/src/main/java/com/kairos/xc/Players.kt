@@ -47,11 +47,13 @@ object Players {
             .setBackBuffer(0, false)
             .build()
         else DefaultLoadControl.Builder()
+            // quanto video serve prima di partire / ripartire, in base alla linea del cliente:
+            // linea buona = parte subito; linea debole = aspetta un attimo in più ma poi non si ferma
             .setBufferDurationsMs(
-                15_000,
+                when (Net.line) { 2 -> 30_000; 1 -> 20_000; else -> 15_000 },
                 if (live) (if (lite) 30_000 else 50_000) else (if (lite) 40_000 else 60_000),
-                1_500,
-                3_000,
+                when (Net.line) { 2 -> 3_000; 1 -> 2_000; else -> 1_200 },
+                when (Net.line) { 2 -> 6_000; 1 -> 4_000; else -> 2_500 },
             )
             .setTargetBufferBytes((if (lite) 16 else if (live) 24 else 40) shl 20)
             .setPrioritizeTimeOverSizeThresholds(!lite)
@@ -64,7 +66,8 @@ object Players {
             MediaCodecUtil.getDecoderInfos(mime, secure, tunneling).sortedBy { if (it.softwareOnly) 0 else 1 }
         }
         // stima iniziale prudente sulle chiavette: i canali HLS con più qualità partono subito e poi salgono
-        val meter = DefaultBandwidthMeter.Builder(ctx).setInitialBitrateEstimate(if (lite) 2_500_000L else 6_000_000L).build()
+        // misura della velocità condivisa da tutti i lettori: ciò che ha imparato un canale vale per il successivo
+        val meter = meter(ctx)
         val selector = DefaultTrackSelector(ctx)
         // niente qualità più alta dello schermo (una TV 720p non scarica il 1080p)
         selector.setParameters(selector.buildUponParameters().setViewportSizeToPhysicalDisplaySize(ctx, true).setPreferredAudioLanguage("it"))
@@ -72,6 +75,11 @@ object Players {
         if (preview) selector.setParameters(selector.buildUponParameters().setMaxVideoSize(960, 540).setMaxVideoBitrate(3_000_000))
         // «Leggerissima»: con i flussi a più qualità si resta a 720p, il decoder delle chiavette vecchie respira
         else if (App.max) selector.setParameters(selector.buildUponParameters().setMaxVideoSize(1280, 720))
+        // linea debole o media: nei flussi a più qualità si sta sotto un tetto (immagine fluida invece di rotelline)
+        if (!preview) when (Net.line) {
+            2 -> selector.setParameters(selector.buildUponParameters().setMaxVideoBitrate(3_500_000))
+            1 -> selector.setParameters(selector.buildUponParameters().setMaxVideoBitrate(7_000_000))
+        }
         val p = ExoPlayer.Builder(ctx, renderers)
             .setBandwidthMeter(meter)
             .setTrackSelector(selector)
@@ -82,6 +90,21 @@ object Players {
         // telefoni: cuffie staccate = pausa (niente audio a sorpresa dall'altoparlante)
         p.setHandleAudioBecomingNoisy(true)
         return p
+    }
+
+    @Volatile private var sharedMeter: DefaultBandwidthMeter? = null
+
+    /** stima iniziale prudente (più bassa sulle chiavette e sulle linee deboli), poi impara dalla connessione vera */
+    fun meter(ctx: Context): DefaultBandwidthMeter {
+        sharedMeter?.let { return it }
+        synchronized(this) {
+            sharedMeter?.let { return it }
+            val m = DefaultBandwidthMeter.Builder(ctx.applicationContext)
+                .setInitialBitrateEstimate(when { Net.line == 2 -> 1_500_000L; App.lite || Net.line == 1 -> 2_500_000L; else -> 6_000_000L })
+                .build()
+            sharedMeter = m
+            return m
+        }
     }
 
     /** [hls] = indirizzo senza estensione che si è rivelato HLS */

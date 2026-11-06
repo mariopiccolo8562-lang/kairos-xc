@@ -76,6 +76,13 @@ object Store {
         get() = s("plChoice")
         set(v) = put("plChoice", v)
     /** portale usato prima di quello attuale: le sue liste restano sul disco, per tornarci al volo */
+    /** qualità della linea imparata (vedi Net.line) */
+    var line: Int
+        get() = p.getInt("lineQ", 0)
+        set(v) = p.edit().putInt("lineQ", v).apply()
+    var lineAt: Long
+        get() = p.getLong("lineAt", 0)
+        set(v) = p.edit().putLong("lineAt", v).apply()
     var plPrev: String
         get() = s("plPrev")
         set(v) = put("plPrev", v)

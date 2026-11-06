@@ -191,10 +191,23 @@ class PlayerActivity : BaseActivity() {
             giveUps++
             step = 0; lastKind = ""
             msg.visibility = View.GONE
-            spin.visibility = View.VISIBLE
+            showSpin()
             startUrl()
         }
     }
+    /** rotellina ritardata: i caricamenti brevi (zapping, piccoli vuoti di rete) non la fanno comparire */
+    private val spinR = Runnable { if (!isFinishing) spin.visibility = View.VISIBLE }
+    private fun showSpin() {
+        if (spin.visibility == View.VISIBLE) return
+        App.main.removeCallbacks(spinR)
+        App.main.postDelayed(spinR, 700)
+    }
+    private fun hideSpin() {
+        App.main.removeCallbacks(spinR)
+        spin.visibility = View.GONE
+    }
+    /** da quando la linea va bene (per migliorare il giudizio dopo 20 minuti senza blocchi) */
+    private var lineOkSince = 0L
     /** il pannello ha chiuso la visione: niente più riproduzione in questa schermata */
     private var kicked = false
     /** tentativi con l'altro formato dopo un «non trovato» del server, per questo canale */
@@ -208,6 +221,7 @@ class PlayerActivity : BaseActivity() {
             checkFreeze()
             checkResolved()
             checkReduced()
+            checkLine()
             if (!live) savePos(false)
             App.main.postDelayed(this, 1000)
         }
@@ -315,6 +329,7 @@ class PlayerActivity : BaseActivity() {
         App.main.removeCallbacks(retryR)
         App.main.removeCallbacks(netWaitR)
         App.main.removeCallbacks(giveUpR)
+        App.main.removeCallbacks(spinR)
         sendEvents()
     }
 
@@ -365,9 +380,9 @@ class PlayerActivity : BaseActivity() {
     private val listener = object : Player.Listener {
         override fun onPlaybackStateChanged(state: Int) {
             when (state) {
-                Player.STATE_BUFFERING -> { spin.visibility = View.VISIBLE; if (bufferingSince == 0L) bufferingSince = mono() }
+                Player.STATE_BUFFERING -> { showSpin(); if (bufferingSince == 0L) bufferingSince = mono() }
                 Player.STATE_READY -> {
-                    spin.visibility = View.GONE
+                    hideSpin()
                     msg.visibility = View.GONE
                     if (firstReady && bufferingSince > 0L && !seeking) stalled()
                     seeking = false
@@ -382,7 +397,7 @@ class PlayerActivity : BaseActivity() {
                     if (live) {
                         // il flusso si è chiuso: si ricollega, ma con pause sempre più lunghe e al massimo 5 volte
                         if (reconnects < 5 && !blocked) { reconnects++; App.main.postDelayed(retryR, 1500L * reconnects) }
-                        else { spin.visibility = View.GONE; showMsg("Il canale si interrompe continuamente.\nProva più tardi o scegli un altro canale.") }
+                        else { hideSpin(); showMsg("Il canale si interrompe continuamente.\nProva più tardi o scegli un altro canale.") }
                     } else onEnded()
                 }
                 else -> {}
@@ -412,7 +427,7 @@ class PlayerActivity : BaseActivity() {
             val code = error.errorCode
             // rete assente (Wi-Fi caduto): non si consumano i rimedi, si aspetta che torni
             if (code in 2000..2999 && Net.type() == "none") {
-                spin.visibility = View.GONE
+                hideSpin()
                 showMsg("Connessione assente.\nLa visione riprende da sola appena torna la rete.")
                 App.main.removeCallbacks(netWaitR)
                 App.main.postDelayed(netWaitR, 3_000)
@@ -445,7 +460,18 @@ class PlayerActivity : BaseActivity() {
         val now = mono()
         stalls.add(now); stallsHour.add(now); lastStallAt = now
         stalls.removeAll { now - it > 75_000 }
+        // due blocchi in 10 minuti: la linea è più debole di quanto pensavamo (vale anche per i prossimi canali)
+        if (stallsHour.count { now - it < 10 * 60_000L } >= 2) { Net.lineWorse(); lineOkSince = now }
         if (stalls.size >= 3) { stalls.clear(); recover("stall", "3 blocchi in 75 s") }
+    }
+
+    /** 20 minuti di visione senza blocchi: la linea va meglio, la prossima volta si parte più in fretta */
+    private fun checkLine() {
+        val p = player ?: return
+        if (p.playbackState != Player.STATE_READY || !p.isPlaying) return
+        val now = mono()
+        if (lineOkSince == 0L) { lineOkSince = now; return }
+        if (now - lastStallAt >= 20 * 60_000L && now - lineOkSince >= 20 * 60_000L) { Net.lineBetter(); lineOkSince = now }
     }
 
     /** un blocco di oltre 12 secondi (o un avvio di oltre 20), solo mentre il lettore sta davvero caricando */
@@ -557,7 +583,7 @@ class PlayerActivity : BaseActivity() {
         lastKind = ""
         bufferingSince = 0L
         gaveUp = true
-        spin.visibility = View.GONE
+        hideSpin()
         App.main.removeCallbacks(retryR)
         try { p.stop() } catch (_: Exception) {}
         showMsg(if (live) "Il canale non risponde in questo momento.\nRiprovo da solo tra poco, oppure scegli un altro canale." else "Il contenuto non si apre ($err).\nRiprovo da solo tra poco, oppure premi OK.")
@@ -717,14 +743,14 @@ class PlayerActivity : BaseActivity() {
         if (!variant) curId = id
         App.main.removeCallbacks(retryR)
         msg.visibility = View.GONE
-        spin.visibility = View.VISIBLE
-        val lighter = !variant && mono() < lighterUntil
+        showSpin()
+        val lighter = !variant && (mono() < lighterUntil || Net.line >= 2)
         val capped = !variant && App.max
         val keepVariants = variants
         bg {
             val r0 = Db.one("live", id) ?: run {
                 // le liste sono state aggiornate e questo numero non esiste più: si rilegge l'elenco dei canali
-                ui { if (my == tuneSeq && !isFinishing) { spin.visibility = View.GONE; showMsg("Canale non più disponibile: elenco aggiornato, scegline un altro."); loadIds() } }
+                ui { if (my == tuneSeq && !isFinishing) { hideSpin(); showMsg("Canale non più disponibile: elenco aggiornato, scegline un altro."); loadIds() } }
                 return@bg
             }
             val vars = if (variant) keepVariants else try { Db.variants(r0) } catch (_: Exception) { emptyList() }
@@ -768,8 +794,8 @@ class PlayerActivity : BaseActivity() {
                 Store.lastLiveK = r0.s("k")
                 showLiveInfo(baseRow ?: r)
                 blocked = block != null
-                if (block != null) { player?.stop(); spin.visibility = View.GONE; showMsg(block); return@ui }
-                if (list.isEmpty()) { spin.visibility = View.GONE; showMsg("Indirizzo del canale non valido."); return@ui }
+                if (block != null) { player?.stop(); hideSpin(); showMsg(block); return@ui }
+                if (list.isEmpty()) { hideSpin(); showMsg("Indirizzo del canale non valido."); return@ui }
                 startUrl()
                 if (!variant) {
                     Pulse.watch(Pulse.Watch("live", "", r0.s("name"), r0.s("k"), "", r0.s("pl")))
@@ -871,7 +897,7 @@ class PlayerActivity : BaseActivity() {
         subV.text = vodSub
         val st = kind
         val title = vodTitle
-        spin.visibility = View.VISIBLE
+        showSpin()
         bg {
             Vpns.awaitForced()
             val block = Panel.stream(st, title)
@@ -879,8 +905,8 @@ class PlayerActivity : BaseActivity() {
                 val p = player ?: return@ui
                 if (isFinishing) return@ui
                 blocked = block != null
-                if (block != null) { spin.visibility = View.GONE; showMsg(block); return@ui }
-                if (vodUrl.isEmpty()) { spin.visibility = View.GONE; showMsg("Indirizzo non valido."); return@ui }
+                if (block != null) { hideSpin(); showMsg(block); return@ui }
+                if (vodUrl.isEmpty()) { hideSpin(); showMsg("Indirizzo non valido."); return@ui }
                 firstReady = false
                 bufferingSince = mono()
                 stalls.clear()

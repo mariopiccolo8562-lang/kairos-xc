@@ -68,6 +68,7 @@ class LiveActivity : BaseActivity() {
     /** canale partito nel riquadro: il prossimo OK su di lui apre lo schermo intero */
     private var previewId = 0L
     private var previewK = ""
+    private var previewName = ""
     private var videoSeq = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -237,20 +238,32 @@ class LiveActivity : BaseActivity() {
         curPos = pos
         val c = chAdapter.cursor ?: return
         curRow = try { if (c.isClosed || !c.moveToPosition(pos)) return; Db.current(c) } catch (_: Exception) { return }
-        // stesso canale ritrovato dopo un aggiornamento dell'elenco: l'anteprima continua
-        if (previewId != 0L && curRow?.s("k") == previewK) { previewId = curRow?.l("_id") ?: previewId; return }
-        stopVideo()
+        // l'anteprima NON si ferma spostandosi: continua sul canale che sta andando finché non si preme OK su un altro.
+        // Stesso canale ritrovato dopo un aggiornamento dell'elenco: si aggiorna solo il suo numero interno.
+        if (previewId != 0L && curRow?.s("k") == previewK) previewId = curRow?.l("_id") ?: previewId
+        previewHint()
         App.main.removeCallbacks(previewR)
         App.main.postDelayed(previewR, 180)
     }
 
-    /** OK sul canale: la prima volta parte nel riquadro, la seconda si apre a schermo intero */
+    /**
+     * OK sul canale: se è quello in anteprima si apre a schermo intero,
+     * altrimenti l'anteprima passa a questo canale (1° OK anteprima, 2° OK schermo intero).
+     */
     private fun onChannelClick(pos: Int) {
         val c = chAdapter.cursor ?: return
-        val id = try { if (pos < 0 || c.isClosed || !c.moveToPosition(pos)) return; c.getLong(0) } catch (_: Exception) { return }
-        if (!previewOn() || (previewId > 0 && id == previewId)) { play(pos); return }
+        val k = try { if (pos < 0 || c.isClosed || !c.moveToPosition(pos)) return; c.getString(1) ?: "" } catch (_: Exception) { return }
+        if (!previewOn() || (previewId > 0 && k == previewK)) { play(pos); return }
         if (pos != curPos || curRow == null) onChannelFocus(pos) // al tocco (telefoni) il canale non prende il focus
         startVideo()
+    }
+
+    /** scritta sul riquadro: cosa succede premendo OK sul canale selezionato */
+    private fun previewHint() {
+        if (previewId == 0L) { idleHint(); return }
+        val r = curRow
+        if (r == null || r.s("k") == previewK) hint(key() + " · schermo intero")
+        else hint("In onda: $previewName  ·  " + key() + " per vedere questo canale")
     }
 
     private fun key() = if (channels.isInTouchMode) "Tocca" else "OK"
@@ -267,7 +280,7 @@ class LiveActivity : BaseActivity() {
     private fun updatePreview() {
         val r = curRow ?: return
         val name = r.s("name")
-        if (previewId == 0L) idleHint()
+        previewHint()
         pch.text = (if (r.l("num") > 0) r.l("num").toString() + " · " else "") + name
         Ui.img(plogo, r.s("logo"), Ui.dp(this, 72), Ui.dp(this, 72))
         favBtn.setImageResource(if (favSet.contains(r.s("k"))) R.drawable.ic_heart_fill else R.drawable.ic_heart)
@@ -314,6 +327,7 @@ class LiveActivity : BaseActivity() {
         val id = r.l("_id")
         previewId = id
         previewK = r.s("k")
+        previewName = r.s("name")
         val my = ++videoSeq
         pspin.visibility = View.VISIBLE
         hint(key() + " · schermo intero")
