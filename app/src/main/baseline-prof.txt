@@ -8,3 +8,10 @@ Landroidx/recyclerview/widget/**;
 HSPLcom/bumptech/glide/**;->**(**)**
 Lcom/bumptech/glide/**;
 HSPLandroidx/core/**;->**(**)**
+# Lettore (media3 / ExoPlayer, HLS, TS, interfaccia): il primo canale dopo l'apertura parte con il codice già compilato,
+# non interpretato. Il codice compilato in anticipo occupa memoria «pulita» (si libera da sola) invece della cache del JIT.
+HSPLandroidx/media3/**;->**(**)**
+Landroidx/media3/**;
+# Kotlin (raccolte, testi): usato da tutta l'app
+HSPLkotlin/**;->**(**)**
+Lkotlin/**;

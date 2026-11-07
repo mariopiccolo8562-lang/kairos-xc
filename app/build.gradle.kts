@@ -27,6 +27,9 @@ android {
         buildConfigField("String", "UPDATE_URL", "\"$updateUrl\"")
         // Fire TV / Android TV / telefoni sono ARM: niente x86, APK più piccolo
         ndk { abiFilters += listOf("armeabi-v7a", "arm64-v8a") }
+        // testi dell'app solo in italiano (sono nel codice): delle librerie restano le risorse predefinite e quelle italiane,
+        // via le traduzioni in altre 70 lingue (risorse dell'APK più leggere)
+        resourceConfigurations += setOf("it")
     }
 
     signingConfigs {
