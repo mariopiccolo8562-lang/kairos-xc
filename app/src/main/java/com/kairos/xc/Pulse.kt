@@ -37,6 +37,8 @@ object Pulse {
     @Volatile private var fgSeq = 0
     /** il pannello ha risposto 429 con «wait»: prima di questo istante non si riprova */
     @Volatile private var waitUntil = 0L
+    /** «vado in sfondo» già mandato per la chiusura chiesta dal pannello: quando le schermate si chiudono non se ne manda un altro */
+    @Volatile private var left = false
     /** un battito alla volta e nell'ordine in cui partono: il «vado in sfondo» arriva sempre dopo quello già in viaggio */
     private val busy = AtomicBoolean(false)
     private val hbPool = Executors.newSingleThreadExecutor { r -> Thread(r, "kx-hb").apply { isDaemon = true } }
@@ -60,6 +62,7 @@ object Pulse {
         App.main.removeCallbacks(tick)
         App.main.removeCallbacks(lateBeat)
         if (fg) {
+            left = false
             fgSeq++
             fgDue = true
             App.main.postDelayed(tick, 1_000) // battito subito (entro 1-2 s), poi il giro solito ogni 20 s
@@ -67,8 +70,29 @@ object Pulse {
         } else {
             watching = null
             fgDue = false
+            if (!left) gone()
+        }
+    }
+
+    /**
+     * Chiusura chiesta dal pannello (comando «exit»): prima il battito «vado in sfondo», così il pannello la mostra subito
+     * non in linea, poi [then] appena è partito (al massimo dopo [maxMs]). Il battito resta uno solo.
+     */
+    fun leave(maxMs: Long, then: () -> Unit) {
+        val once = AtomicBoolean(false)
+        val go = Runnable { if (once.compareAndSet(false, true)) try { then() } catch (t: Throwable) { Log.w("KairosXC", "leave", t) } }
+        App.main.postDelayed(go, maxMs)
+        if (on) {
+            on = false
+            left = true
+            App.main.removeCallbacks(tick)
+            App.main.removeCallbacks(lateBeat)
+            watching = null
+            fgDue = false
             gone()
         }
+        // i battiti partono in fila: quando tocca a questo, il «vado in sfondo» (anche uno già in coda) è partito
+        hbPool.execute { App.main.post(go) }
     }
 
     /** chiamato dal player quando inizia o finisce una visione */

@@ -86,6 +86,8 @@ class PlayerActivity : BaseActivity() {
         @Volatile var reducedNoticed = false
         /** per ogni portale l'ultimo formato che ha funzionato (0 = m3u8, 1 = ts) */
         val fmtPref = java.util.concurrent.ConcurrentHashMap<String, Int>()
+        /** fotogrammi al secondo «standard»: una misura che dista meno di 1,5 si arrotonda a questi */
+        private val FPS_STD = intArrayOf(24, 25, 30, 48, 50, 60, 100, 120)
     }
 
     private lateinit var pv: PlayerView
@@ -221,6 +223,11 @@ class PlayerActivity : BaseActivity() {
     /** il riquadro resta visibile da solo fino a questo istante (dopo il primo fotogramma e a ogni cambio di risoluzione) */
     private var resUntil = 0L
     private val resR = Runnable { resRefresh() }
+    /** fps misurati dal decoder quando il formato non li dice (canali TS): media smorzata, 0 = non ancora */
+    private var fpsMeas = 0.0
+    /** ultima lettura del contatore dei fotogrammi mostrati (-1 = da rifare) e suo istante */
+    private var fpsN = -1
+    private var fpsT = 0L
 
     private val hideR = Runnable { hideOverlay() }
     private val tuneR = Runnable { if (ids.isNotEmpty()) tune(ids[idx]) }
@@ -280,6 +287,7 @@ class PlayerActivity : BaseActivity() {
             checkResolved()
             checkReduced()
             checkFill()
+            if (live) measureFps()
             if (!live) { savePos(false); goodPos() }
             App.main.postDelayed(this, 1000)
         }
@@ -889,13 +897,52 @@ class PlayerActivity : BaseActivity() {
     /** solo i canali in diretta; permesso spento dal pannello = mai (chiave assente = consentito) */
     private fun resOn(): Boolean = live && Panel.state?.perm("resInd") != false
 
-    /** es. «FHD · 1080p · 50 fps»; gli fps si omettono se il formato video non li dice */
+    /** es. «FHD · 1080p · 50 fps»; gli fps si omettono finché non si conoscono (né dal formato né dalla misura) */
     private fun resText(): String {
         val h = resH
         if (h <= 0) return ""
         val q = when { h >= 2000 -> "4K"; h >= 1000 -> "FHD"; h >= 700 -> "HD"; else -> "SD" }
-        val fps = player?.videoFormat?.frameRate ?: 0f
-        return "$q · ${h}p" + (if (fps > 0f) " · " + Math.round(fps) + " fps" else "")
+        val fps = fpsShown()
+        return "$q · ${h}p" + (if (fps > 0) " · $fps fps" else "")
+    }
+
+    /** fps da mostrare: quelli del formato video, altrimenti quelli misurati dal decoder (0 = non ancora noti) */
+    private fun fpsShown(): Int {
+        val f = player?.videoFormat?.frameRate ?: 0f
+        val v = if (f > 0f) f.toDouble() else fpsMeas
+        return if (v > 0.0) fpsStd(v) else 0
+    }
+
+    /** al valore standard più vicino (24, 25, 30, 48, 50, 60, 100, 120) se dista meno di 1,5, altrimenti all'intero */
+    private fun fpsStd(v: Double): Int {
+        val best = FPS_STD.minByOrNull { Math.abs(it - v) } ?: return Math.round(v).toInt()
+        return if (Math.abs(best - v) < 1.5) best else Math.round(v).toInt()
+    }
+
+    /**
+     * Fps misurati dal decoder per i flussi il cui formato non li dice (canali TS): fotogrammi mostrati / tempo, circa ogni
+     * secondo (dal giro del lettore); fuori da 5..130 si scartano, poi media smorzata (0,6 la vecchia + 0,4 la nuova).
+     */
+    private fun measureFps() {
+        val p = player
+        if (p == null || !resOn() || (p.videoFormat?.frameRate ?: 0f) > 0f) { fpsN = -1; return }
+        val c = p.videoDecoderCounters
+        // in pausa, in caricamento o senza decoder video la lettura riparte da capo (la media resta)
+        if (c == null || p.playbackState != Player.STATE_READY || !p.isPlaying) { fpsN = -1; return }
+        c.ensureUpdated()
+        val n = c.renderedOutputBufferCount
+        val now = mono()
+        if (fpsN in 0..n && now > fpsT) {
+            val f = (n - fpsN) * 1000.0 / (now - fpsT)
+            if (f in 5.0..130.0) {
+                val before = fpsShown()
+                fpsMeas = if (fpsMeas > 0.0) fpsMeas * 0.6 + f * 0.4 else f
+                // riquadro già a video: «· NN fps» compare (o cambia) appena c'è la misura
+                if (fpsShown() != before && res.visibility == View.VISIBLE) resRefresh()
+            }
+        }
+        fpsN = n
+        fpsT = now
     }
 
     /** riquadro visibile da solo per [ms]; dopo resta solo insieme alla barra informazioni */
@@ -1096,9 +1143,11 @@ class PlayerActivity : BaseActivity() {
         bufferingSince = startAt // il tempo di avvio si conta da qui (il lettore può restare in caricamento)
         firstReady = false
         gaveUp = false
-        // flusso nuovo: la risoluzione si rilegge dal primo formato video
+        // flusso nuovo: la risoluzione si rilegge dal primo formato video, gli fps si misurano da capo
         resH = 0
         resUntil = 0L
+        fpsMeas = 0.0
+        fpsN = -1
         resRefresh()
         // film: si riparte dal punto in cui si era (un errore di rete non fa ricominciare da capo)
         if (live) p.setMediaItem(Players.item(u, forceHls))

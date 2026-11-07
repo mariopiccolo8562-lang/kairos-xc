@@ -109,7 +109,8 @@ object Remote {
                     Ui.toast("Il fornitore ha reimpostato il PIN del controllo genitori: ora è 0000")
                     val a = App.top; if (a != null && a !is PlayerActivity) App.main.postDelayed({ Parental.firstRun(a, true) }, 1200)
                 }
-                "exit" -> { ack(id, true, "chiusa"); App.main.postDelayed({ try { App.top?.finishAffinity() } catch (_: Exception) {}; App.main.postDelayed({ exitProcess(0) }, 300) }, 700) }
+                // prima il battito «vado in sfondo» (al massimo 1,5 s di attesa), poi si chiude come prima
+                "exit" -> { ack(id, true, "chiusa"); Pulse.leave(1_500) { App.main.postDelayed({ try { App.top?.finishAffinity() } catch (_: Exception) {}; App.main.postDelayed({ exitProcess(0) }, 300) }, 700) } }
                 else -> ack(id, false, "comando non supportato")
             }
         }
