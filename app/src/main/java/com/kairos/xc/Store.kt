@@ -165,6 +165,13 @@ object Store {
     var lastLiveId: Long
         get() = p.getLong("liveId", 0)
         set(v) = p.edit().putLong("liveId", v).apply()
+    /**
+     * Ultimo canale (numero interno e chiave stabile) in una sola scrittura: a ogni cambio canale il file delle impostazioni
+     * (con dentro lo stato del pannello) si riscrive una volta invece di due, e uscendo dalla schermata Android aspetta meno.
+     */
+    fun setLastLive(id: Long, k: String) {
+        p.edit().putLong("liveId", id).putString("liveK", k).apply()
+    }
 
     var seenMsgs: Set<String>
         get() = p.getStringSet("seenMsgs", emptySet()) ?: emptySet()

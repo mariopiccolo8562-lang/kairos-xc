@@ -212,11 +212,12 @@ object Panel {
      * Risposta: codice HTTP (0 = pannello non raggiungibile) e corpo; 429 = troppo presto, nel corpo «wait» in secondi.
      */
     fun heartbeat(w: Pulse.Watch?, kickAck: Long, vpnOn: Boolean, screen: String, stats: JSONObject?, vis: Boolean = true): Pair<Int, JSONObject?> {
+        val nt = Net.type() // una volta sola per battito (prima due chiamate al sistema)
         val b = auth()
             .put("state", w?.state ?: "idle").put("title", w?.title ?: "").put("ch", w?.ch ?: "").put("chId", w?.chId ?: "")
             .put("group", w?.group ?: "").put("pl", w?.pl ?: "").put("prof", K.profile()?.name ?: "")
             .put("ver", ver).put("ui", "").put("model", model).put("screen", screen.take(20))
-            .put("net", JSONObject().put("type", Net.type()).apply { if (Net.type() == "wifi") Net.rssi().takeIf { it != 0 }?.let { put("rssi", it) } })
+            .put("net", JSONObject().put("type", nt).apply { if (nt == "wifi") Net.rssi().takeIf { it != 0 }?.let { put("rssi", it) } })
             .put("vpn", if (vpnOn) "on" else "off")
             .put("vis", vis) // presenza: in primo piano o appena andata in sfondo (subito non in linea)
         // diagnostica in «Online ora»: codec, decodifica, blocchi, fotogrammi persi, qualità ridotta

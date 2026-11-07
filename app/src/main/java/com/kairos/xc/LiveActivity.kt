@@ -426,8 +426,7 @@ class LiveActivity : BaseActivity() {
     private fun playRow(id: Long, k: String) {
         stopVideo()
         releaseVideo() // un solo decoder alla volta: l'anteprima si chiude prima dello schermo intero
-        Store.lastLiveId = id
-        Store.lastLiveK = k
+        Store.setLastLive(id, k)
         @Suppress("DEPRECATION")
         startActivityForResult(Intent(this, PlayerActivity::class.java).putExtra("kind", "live").putExtra("cat", curCat).putExtra("rowId", id), 7)
     }

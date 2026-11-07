@@ -1120,8 +1120,7 @@ class PlayerActivity : BaseActivity() {
                 behindLive = 0
                 giveUps = 0
                 App.main.removeCallbacks(giveUpR)
-                Store.lastLiveId = curId
-                Store.lastLiveK = r0.s("k")
+                Store.setLastLive(curId, r0.s("k"))
                 showLiveInfo(baseRow ?: r)
                 blocked = block != null
                 if (block != null) { player?.stop(); hideSpin(); showMsg(block); return@ui }
