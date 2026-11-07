@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.View
+import android.view.ViewGroup
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.ProgressBar
@@ -213,6 +214,14 @@ class PlayerActivity : BaseActivity() {
     private lateinit var notice: TextView
     private val noticeR = Runnable { notice.visibility = View.GONE }
 
+    // risoluzione e FPS in alto a destra (permesso «resInd» del cliente): solo per i canali in diretta
+    private lateinit var res: TextView
+    /** altezza del video del flusso in corso (0 = non ancora nota): se cambia, è cambiata la risoluzione (qualità adattiva) */
+    private var resH = 0
+    /** il riquadro resta visibile da solo fino a questo istante (dopo il primo fotogramma e a ogni cambio di risoluzione) */
+    private var resUntil = 0L
+    private val resR = Runnable { resRefresh() }
+
     private val hideR = Runnable { hideOverlay() }
     private val tuneR = Runnable { if (ids.isNotEmpty()) tune(ids[idx]) }
     private val zapR = Runnable { commitZap() }
@@ -295,6 +304,9 @@ class PlayerActivity : BaseActivity() {
         info = findViewById(R.id.info)
         playPause = findViewById(R.id.playPause)
         notice = findViewById(R.id.notice)
+        res = findViewById(R.id.res)
+        // la barra in alto cambia misura (o compare per la prima volta): il riquadro si rimette sotto l'orologio
+        top.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> resPlace() }
         findViewById<View>(R.id.logoBox).clipToOutline = true
         clock(findViewById(R.id.clock))
 
@@ -383,6 +395,7 @@ class PlayerActivity : BaseActivity() {
         App.main.removeCallbacks(cushionR)
         App.main.removeCallbacks(spinR)
         App.main.removeCallbacks(noticeR)
+        App.main.removeCallbacks(resR)
         sendEvents()
     }
 
@@ -495,6 +508,7 @@ class PlayerActivity : BaseActivity() {
 
         override fun onRenderedFirstFrame() {
             if (ttff < 0 && startAt > 0) ttff = mono() - startAt
+            if (live) resFlash(6_000) // canale aperto: risoluzione e FPS per qualche secondo
         }
 
         override fun onVideoSizeChanged(videoSize: VideoSize) {
@@ -502,6 +516,12 @@ class PlayerActivity : BaseActivity() {
             val q = when { h >= 2000 -> "4K"; h >= 1000 -> "FHD"; h >= 700 -> "HD"; h > 0 -> "SD"; else -> "" }
             badge.text = if (live) (if (q.isEmpty()) "LIVE" else "$q · LIVE") else q
             badge.visibility = if (badge.text.isEmpty()) View.GONE else View.VISIBLE
+            if (live && h > 0) {
+                // risoluzione cambiata a visione partita (qualità adattiva): di nuovo per qualche secondo
+                val changed = resH > 0 && h != resH
+                resH = h
+                if (changed) resFlash(4_000) else resRefresh()
+            }
         }
 
         override fun onPlayerError(error: PlaybackException) {
@@ -865,6 +885,46 @@ class PlayerActivity : BaseActivity() {
         App.main.postDelayed(noticeR, ms)
     }
 
+    /* ---------------- risoluzione e FPS (permesso «resInd») ---------------- */
+    /** solo i canali in diretta; permesso spento dal pannello = mai (chiave assente = consentito) */
+    private fun resOn(): Boolean = live && Panel.state?.perm("resInd") != false
+
+    /** es. «FHD · 1080p · 50 fps»; gli fps si omettono se il formato video non li dice */
+    private fun resText(): String {
+        val h = resH
+        if (h <= 0) return ""
+        val q = when { h >= 2000 -> "4K"; h >= 1000 -> "FHD"; h >= 700 -> "HD"; else -> "SD" }
+        val fps = player?.videoFormat?.frameRate ?: 0f
+        return "$q · ${h}p" + (if (fps > 0f) " · " + Math.round(fps) + " fps" else "")
+    }
+
+    /** riquadro visibile da solo per [ms]; dopo resta solo insieme alla barra informazioni */
+    private fun resFlash(ms: Long) {
+        resUntil = mono() + ms
+        App.main.removeCallbacks(resR)
+        App.main.postDelayed(resR, ms + 50)
+        resRefresh()
+    }
+
+    /** visibile dopo il primo fotogramma, a ogni cambio di risoluzione e sempre con la barra informazioni */
+    private fun resRefresh() {
+        val p = player
+        val text = if (resOn() && p != null && p.playbackState != Player.STATE_IDLE && zap.visibility != View.VISIBLE) resText() else ""
+        if (text.isEmpty() || (mono() >= resUntil && top.visibility != View.VISIBLE)) { res.visibility = View.GONE; return }
+        res.text = text
+        resPlace()
+        res.visibility = View.VISIBLE
+    }
+
+    /** con la barra in alto visibile il riquadro scende sotto orologio e qualità, così non li copre */
+    private fun resPlace() {
+        if (top.visibility != View.VISIBLE) { res.translationY = 0f; return }
+        val clockBottom = findViewById<View>(R.id.clock).bottom
+        val m = (res.layoutParams as? ViewGroup.MarginLayoutParams)?.topMargin ?: 0
+        val y = if (clockBottom > 0) top.top + clockBottom + Ui.dp(this, 8) - m else Ui.dp(this, 50)
+        res.translationY = y.coerceAtLeast(0).toFloat()
+    }
+
     /* ---------------- diagnostica in «Online ora» ---------------- */
     private fun variantLabel(): String = if (reduced) Quality.label(row?.l("q")?.toInt() ?: 2) else "full"
 
@@ -1036,6 +1096,10 @@ class PlayerActivity : BaseActivity() {
         bufferingSince = startAt // il tempo di avvio si conta da qui (il lettore può restare in caricamento)
         firstReady = false
         gaveUp = false
+        // flusso nuovo: la risoluzione si rilegge dal primo formato video
+        resH = 0
+        resUntil = 0L
+        resRefresh()
         // film: si riparte dal punto in cui si era (un errore di rete non fa ricominciare da capo)
         if (live) p.setMediaItem(Players.item(u, forceHls))
         else p.setMediaItem(Players.item(u, forceHls), maxOf(pos ?: (if (p.currentPosition > 0) p.currentPosition else lastGoodPos), 0L))
@@ -1087,6 +1151,7 @@ class PlayerActivity : BaseActivity() {
         zapBuf += d.toString()
         zap.text = zapBuf
         zap.visibility = View.VISIBLE
+        resRefresh() // il numero digitato sta nello stesso angolo: il riquadro si toglie finché c'è
         App.main.removeCallbacks(zapR)
         App.main.postDelayed(zapR, 1500)
     }
@@ -1095,6 +1160,7 @@ class PlayerActivity : BaseActivity() {
         val n = zapBuf.toLongOrNull()
         zapBuf = ""
         zap.visibility = View.GONE
+        resRefresh()
         if (n == null) return
         val pls = K.activeIds()
         val kids = K.kids
@@ -1236,6 +1302,7 @@ class PlayerActivity : BaseActivity() {
         if (bottom.visibility == View.VISIBLE) { bump(); return }
         (top as android.view.ViewGroup).descendantFocusability = android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS
         top.visibility = View.VISIBLE
+        resRefresh() // con la barra informazioni si vede sempre anche risoluzione e FPS
         App.main.removeCallbacks(hideR)
         App.main.postDelayed(hideR, 3500)
     }
@@ -1245,6 +1312,7 @@ class PlayerActivity : BaseActivity() {
         top.visibility = View.VISIBLE
         val wasHidden = bottom.visibility != View.VISIBLE
         bottom.visibility = View.VISIBLE
+        resRefresh()
         updateTime()
         if (wasHidden) playPause.requestFocus()
         bump()
@@ -1259,6 +1327,7 @@ class PlayerActivity : BaseActivity() {
         App.main.removeCallbacks(hideR)
         top.visibility = View.GONE
         bottom.visibility = View.GONE
+        resRefresh()
     }
 
     private fun showMsg(t: String) {
@@ -1357,7 +1426,7 @@ class PlayerActivity : BaseActivity() {
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         when {
-            zap.visibility == View.VISIBLE -> { App.main.removeCallbacks(zapR); zapBuf = ""; zap.visibility = View.GONE }
+            zap.visibility == View.VISIBLE -> { App.main.removeCallbacks(zapR); zapBuf = ""; zap.visibility = View.GONE; resRefresh() }
             bottom.visibility == View.VISIBLE -> hideOverlay()
             else -> leave()
         }

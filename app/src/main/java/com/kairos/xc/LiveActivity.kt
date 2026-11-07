@@ -124,11 +124,13 @@ class LiveActivity : BaseActivity() {
         super.onResume()
         favSet = Store.favs("live")
         // portale o profilo cambiati mentre si guardava (pannello, Impostazioni): elenco del portale giusto
-        if (loadedSig.isNotEmpty() && sig() != loadedSig) { curRow?.let { restoreK = it.s("k") }; loadCats(refresh = true); return }
+        // (di ritorno dal lettore resta il canale guardato, già indicato in onActivityResult)
+        if (loadedSig.isNotEmpty() && sig() != loadedSig) { if (restoreK.isEmpty()) curRow?.let { restoreK = it.s("k") }; loadCats(refresh = true); return }
         chAdapter.notifyDataSetChanged()
     }
 
-    private fun sig() = K.activeIds().joinToString(",") + "|" + K.kids + "|" + Store.profileId
+    /** con la Home decisa dal fornitore (primo piano / nascoste): se il pannello la cambia, le categorie si riordinano */
+    private fun sig() = K.activeIds().joinToString(",") + "|" + K.kids + "|" + Store.profileId + "|" + HomeCfg.key()
 
     override fun onPause() {
         super.onPause()
@@ -161,7 +163,8 @@ class LiveActivity : BaseActivity() {
         val kids = K.kids
         val favs = Store.favs("live")
         bg {
-            val list = Db.cats("live", pls, kids)
+            // in cima quelle in primo piano, in fondo quelle nascoste dal fornitore
+            val list = HomeCfg.order(Db.cats("live", pls, kids)) { it.name }
             val total = Db.count("live", pls, kids)
             ui {
                 if (isFinishing) return@ui

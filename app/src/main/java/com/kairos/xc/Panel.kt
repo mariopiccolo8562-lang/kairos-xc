@@ -207,23 +207,28 @@ object Panel {
         return s
     }
 
-    fun heartbeat(w: Pulse.Watch?, kickAck: Long, vpnOn: Boolean, screen: String, stats: JSONObject?): JSONObject? {
+    /**
+     * Battito. [vis] = app in primo piano (menu o visione); false = «vado in sfondo», mandato una volta sola con state idle.
+     * Risposta: codice HTTP (0 = pannello non raggiungibile) e corpo; 429 = troppo presto, nel corpo «wait» in secondi.
+     */
+    fun heartbeat(w: Pulse.Watch?, kickAck: Long, vpnOn: Boolean, screen: String, stats: JSONObject?, vis: Boolean = true): Pair<Int, JSONObject?> {
         val b = auth()
             .put("state", w?.state ?: "idle").put("title", w?.title ?: "").put("ch", w?.ch ?: "").put("chId", w?.chId ?: "")
             .put("group", w?.group ?: "").put("pl", w?.pl ?: "").put("prof", K.profile()?.name ?: "")
             .put("ver", ver).put("ui", "").put("model", model).put("screen", screen.take(20))
             .put("net", JSONObject().put("type", Net.type()).apply { if (Net.type() == "wifi") Net.rssi().takeIf { it != 0 }?.let { put("rssi", it) } })
             .put("vpn", if (vpnOn) "on" else "off")
+            .put("vis", vis) // presenza: in primo piano o appena andata in sfondo (subito non in linea)
         // diagnostica in «Online ora»: codec, decodifica, blocchi, fotogrammi persi, qualità ridotta
         if (stats != null) b.put("stats", stats)
         if (kickAck > 0) b.put("kickAck", kickAck)
         b.put("cfg", Remote.snapshot()).put("rcv", Store.rcv) // controllo remoto: impostazioni attuali e configurazione applicata
         return try {
-            val (c, j) = post("/api/player/heartbeat", b)
+            val r = post("/api/player/heartbeat", b)
             // dispositivo eliminato o non più riconosciuto dal pannello: si rilegge subito lo stato
-            if (c == 401 || c == 403) hbDenied = true
-            if (c == 200) j else null
-        } catch (_: Exception) { null }
+            if (r.first == 401 || r.first == 403) hbDenied = true
+            r
+        } catch (_: Exception) { 0 to null }
     }
 
     /** conferma al pannello di un comando del controllo remoto */
@@ -345,6 +350,12 @@ object K {
         val s = Panel.state ?: return false
         return s.perm("plSwitch") && playlists().size > 1 && (profile()?.pl ?: "all") == "all"
     }
+
+    /**
+     * Permesso «lite» del cliente (chiave assente = consentito). Spento dal pannello: la modalità leggera la decide il fornitore
+     * (quella imposta, altrimenti automatica). Serve anche all'avvio, prima di ogni schermata: si legge l'ultimo stato salvato.
+     */
+    fun liteAllowed(): Boolean = (Panel.state ?: Panel.loadCached())?.perm("lite") ?: true
 
     fun profilesOn(): Boolean {
         val s = Panel.state ?: return false

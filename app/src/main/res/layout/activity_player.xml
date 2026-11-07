@@ -54,6 +54,26 @@
         android:textStyle="bold"
         android:visibility="gone" />
 
+    <!-- risoluzione e FPS dei canali in diretta (permesso «resInd»): solo indicazione, non prende il focus né i tasti -->
+    <TextView
+        android:id="@+id/res"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|right"
+        android:layout_margin="@dimen/pad"
+        android:background="@drawable/bg_badge"
+        android:clickable="false"
+        android:focusable="false"
+        android:paddingBottom="6dp"
+        android:paddingLeft="12dp"
+        android:paddingRight="12dp"
+        android:paddingTop="6dp"
+        android:singleLine="true"
+        android:textColor="@color/text"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
     <TextView
         android:id="@+id/zap"
         android:layout_width="wrap_content"
