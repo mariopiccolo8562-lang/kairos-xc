@@ -25,8 +25,9 @@ class App : Application() {
         Db.init(this)
         lite = detectLite()
         max = Store.liteMode == "max"
-        // immagini: memoria e spazio su disco con un tetto per classe del dispositivo (vedi Img)
-        Img.glide()
+        // immagini (vedi Img): la Home non ne carica, quindi Glide si prepara in sottofondo dopo i primi fotogrammi
+        // (se una lista arriva prima, si prepara lì al primo caricamento)
+        main.postDelayed({ bg { Img.glide() } }, 1_500)
         // file dell'aggiornamento già installato: via, le chiavette hanno poco spazio
         bg {
             for (d in listOfNotNull(java.io.File(cacheDir, "apk"), externalCacheDir)) java.io.File(d, "kairos-xc-update.apk").takeIf { it.exists() }?.delete()

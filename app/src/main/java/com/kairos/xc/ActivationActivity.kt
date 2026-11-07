@@ -73,6 +73,7 @@ class ActivationActivity : BaseActivity() {
                 ui { say((e.message ?: "Errore di rete") + ". Riprovo tra poco…", true); later(8_000) }
                 return@bg
             }
+            Vpns.warm() // libreria WireGuard caricata qui, non sul thread principale
             ui { show(s) }
         }
     }

@@ -113,6 +113,15 @@ object Vpns {
         if (asked) { asked = false; pending = null; if (KxVpn.state == "connecting") KxVpn.fail("VPN non attivata: riprova") }
     }
 
+    /**
+     * VPN da accendere: la libreria WireGuard (qualche MB di codice nativo) si carica qui, da un thread di lavoro,
+     * così apply() sul thread principale la trova già pronta. Nessun effetto se la VPN non serve.
+     */
+    fun warm() {
+        if (wanted() == null) return
+        try { KxVpn.supported(App.I) } catch (_: Throwable) {}
+    }
+
     fun wanted(): String? {
         val s = Panel.state ?: return null
         if (!s.active || s.vpnConf.isEmpty()) return null

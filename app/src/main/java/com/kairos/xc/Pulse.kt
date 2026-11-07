@@ -199,6 +199,7 @@ object Pulse {
     fun refresh() {
         lastReg = SystemClock.elapsedRealtime()
         val s = try { Panel.register() } catch (_: Exception) { return }
+        Vpns.warm() // libreria WireGuard caricata qui, non sul thread principale
         ui { applyState(s) }
     }
 

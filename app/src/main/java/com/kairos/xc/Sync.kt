@@ -42,25 +42,43 @@ object Sync {
     /** portale dell'ultimo errore: l'attesa di 30 minuti vale solo per lui, non per gli altri portali */
     @Volatile private var failKey = ""
 
-    fun needed(): Boolean {
-        val pls = K.active()
-        if (pls.isEmpty()) return false
+    /**
+     * true = da scaricare, false = liste pronte, null = da controllare sul disco (una volta per portale: start() si chiama a ogni
+     * schermata). Qui solo le impostazioni: l'archivio non si apre mai sul thread principale.
+     */
+    private fun needed(pls: List<Playlist>): Boolean? {
         val ids = pls.map { it.id }
-        // dopo un errore si riprova al massimo ogni 30 minuti (o subito con «Aggiorna liste»)
-        if (failKey == ids.joinToString(",") && System.currentTimeMillis() - failAt < 30 * 60_000L) return false
-        if (sig(pls) != Store.syncSigOf(ids) || System.currentTimeMillis() - Store.syncAtOf(ids) > 12 * 3600_000L) return true
-        // controllo sul disco una volta sola per portale (needed() si chiama a ogni schermata)
         val key = ids.joinToString(",")
-        if (dataOk != key) { if (!Db.hasData(ids)) return true; dataOk = key }
-        return false
+        // dopo un errore si riprova al massimo ogni 30 minuti (o subito con «Aggiorna liste»)
+        if (failKey == key && System.currentTimeMillis() - failAt < 30 * 60_000L) return false
+        if (sig(pls) != Store.syncSigOf(ids) || System.currentTimeMillis() - Store.syncAtOf(ids) > 12 * 3600_000L) return true
+        return if (dataOk == key) false else null
     }
     @Volatile private var dataOk = ""
+    @Volatile private var diskCheck = ""
+
+    /** archivio aperto e controllato sul thread delle liste: se mancano i dati di questo portale (es. archivio rifatto) si scaricano */
+    private fun checkDisk(pls: List<Playlist>) {
+        val ids = pls.map { it.id }
+        val key = ids.joinToString(",")
+        if (diskCheck == key) return
+        diskCheck = key
+        exec.execute {
+            val has = Db.hasData(ids)
+            diskCheck = ""
+            if (has) dataOk = key else ui { if (!running && K.activeIds() == ids) start(force = true) }
+        }
+    }
 
     fun start(force: Boolean = false) {
         if (running) return
         val pls = K.active()
         if (pls.isEmpty()) return
-        if (!force && !needed()) return
+        if (!force) when (needed(pls)) {
+            false -> return
+            null -> { checkDisk(pls); return }
+            true -> {}
+        }
         running = true
         dataOk = ""
         pct = 0
