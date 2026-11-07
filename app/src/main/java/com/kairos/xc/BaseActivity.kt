@@ -71,6 +71,8 @@ abstract class BaseActivity : Activity() {
         private set
     /** immagini lasciate andare perché sopra c'è il lettore: si ricaricano al ritorno */
     private var imgReleased = false
+    /** sopra c'è il lettore: le immagini che arrivano adesso (dalla rete) si caricano solo al ritorno */
+    val imagesReleased: Boolean get() = imgReleased
 
     override fun onStart() {
         super.onStart()
@@ -131,6 +133,8 @@ abstract class BaseActivity : Activity() {
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) immersive()
+        // una finestra (messaggio, PIN…) prende i tasti: il rilascio di un tasto tenuto premuto non arriverebbe qui
+        else Img.reset(this)
     }
 
     @Suppress("DEPRECATION")
