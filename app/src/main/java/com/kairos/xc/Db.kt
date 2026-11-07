@@ -11,34 +11,60 @@ import android.database.sqlite.SQLiteOpenHelper
  */
 object Db {
     private const val NAME = "lib.db"
-    private const val VERSION = 4 // 2: versioni dei canali · 3: colonna arch · 4: indice per le liste canali grandi
+    // 2: versioni dei canali · 3: colonna arch · 4: indice per le liste canali grandi · 5: indici per portale (liste già in ordine)
+    private const val VERSION = 5
+
+    /**
+     * Indici della versione 5. Ogni lista legge solo il portale in uso, già nell'ordine in cui si mostra: «Tutti i canali» per
+     * numero e «Tutti» / «Aggiunti di recente» dei film e delle serie per data, senza riordinare decine di migliaia di righe
+     * (né all'apertura né a ogni nuova finestra del cursore); categorie e conteggi si leggono dall'indice, non dalla tabella;
+     * il canale digitato col numero si trova al volo. Sostituiscono gli indici su sola categoria e sola data.
+     */
+    private val V5 = listOf(
+        "DROP INDEX IF EXISTS live_cat",
+        "DROP INDEX IF EXISTS vod_cat",
+        "DROP INDEX IF EXISTS vod_added",
+        "DROP INDEX IF EXISTS series_cat",
+        "DROP INDEX IF EXISTS series_added",
+        "CREATE INDEX IF NOT EXISTS live_pn ON live(pl, num)",
+        "CREATE INDEX IF NOT EXISTS vod_pc ON vod(pl, cat)",
+        "CREATE INDEX IF NOT EXISTS vod_pa ON vod(pl, added DESC, _id)",
+        "CREATE INDEX IF NOT EXISTS series_pc ON series(pl, cat)",
+        "CREATE INDEX IF NOT EXISTS series_pa ON series(pl, added DESC, _id)",
+    )
 
     private val SCHEMA = listOf(
         "CREATE TABLE cat (kind TEXT, id TEXT, name TEXT, ord INTEGER, pl TEXT, adult INTEGER)",
         "CREATE INDEX cat_k ON cat(kind, pl)",
         "CREATE TABLE live (_id INTEGER PRIMARY KEY, k TEXT, pl TEXT, cat TEXT, num INTEGER, name TEXT, logo TEXT, sid TEXT, url TEXT, epg TEXT, adult INTEGER, qkey TEXT, q INTEGER, hevc INTEGER, arch INTEGER DEFAULT 0)",
-        "CREATE INDEX live_cat ON live(cat)",
         "CREATE INDEX live_q ON live(qkey)",
         "CREATE INDEX live_k ON live(k)",
         "CREATE INDEX live_pcn ON live(pl, cat, num)",
         "CREATE TABLE vod (_id INTEGER PRIMARY KEY, k TEXT, pl TEXT, cat TEXT, name TEXT, img TEXT, sid TEXT, ext TEXT, url TEXT, rating TEXT, year TEXT, added INTEGER, adult INTEGER)",
-        "CREATE INDEX vod_cat ON vod(cat)",
         "CREATE INDEX vod_k ON vod(k)",
-        "CREATE INDEX vod_added ON vod(added)",
         "CREATE TABLE series (_id INTEGER PRIMARY KEY, k TEXT, pl TEXT, cat TEXT, name TEXT, img TEXT, sid TEXT, ext TEXT, url TEXT, rating TEXT, year TEXT, added INTEGER, adult INTEGER, plot TEXT)",
-        "CREATE INDEX series_cat ON series(cat)",
         "CREATE INDEX series_k ON series(k)",
-        "CREATE INDEX series_added ON series(added)",
         "CREATE TABLE ep (_id INTEGER PRIMARY KEY, series INTEGER, season INTEGER, num INTEGER, title TEXT, url TEXT)",
         "CREATE INDEX ep_s ON ep(series)",
-    )
+    ) + V5.filter { it.startsWith("CREATE") }
 
+    /** l'archivio si apre (e si aggiorna) solo dai thread di lavoro: le liste, il caricamento delle playlist */
     private class H(c: Context) : SQLiteOpenHelper(c, NAME, null, VERSION) {
         init { setWriteAheadLoggingEnabled(true) }
         override fun onCreate(db: SQLiteDatabase) { SCHEMA.forEach { db.execSQL(it) } }
         override fun onUpgrade(db: SQLiteDatabase, oldV: Int, newV: Int) {
-            // 3 → 4: solo un indice in più, le liste scaricate restano
-            if (oldV == 3) { db.execSQL("CREATE INDEX IF NOT EXISTS live_pcn ON live(pl, cat, num)"); return }
+            // 3 → 4 → 5: solo indici, le liste scaricate restano
+            if (oldV == 3 || oldV == 4) {
+                if (oldV == 3) db.execSQL("CREATE INDEX IF NOT EXISTS live_pcn ON live(pl, cat, num)")
+                V5.forEach { db.execSQL(it) }
+                return
+            }
+            rebuild(db)
+        }
+        // app tornata a una versione più vecchia (installazione manuale): archivio rifatto invece di un errore all'apertura
+        override fun onDowngrade(db: SQLiteDatabase, oldV: Int, newV: Int) = rebuild(db)
+
+        private fun rebuild(db: SQLiteDatabase) {
             listOf("cat", "live", "vod", "series", "ep").forEach { db.execSQL("DROP TABLE IF EXISTS $it") }
             onCreate(db)
             Store.clearSync() // archivio nuovo: le liste si ricaricano
@@ -92,8 +118,14 @@ object Db {
 
     private class Q(var where: String, val args: ArrayList<String>)
 
-    private fun base(pls: List<String>, kids: Boolean): Q {
-        val q = Q("pl IN (" + pls.joinToString(",") { "?" } + ")", ArrayList(pls))
+    /**
+     * Filtro sul portale (uno solo in Kairos XC: «pl = ?», così anche l'SQLite dei dispositivi vecchi usa gli indici per l'ordine).
+     * [byKey]: «+pl» lascia gli indici sul portale a chi cerca per chiave (preferiti, «Continua a guardare») o legge tutto in fila
+     * (ricerca nel nome): con l'indice sul portale l'SQLite scorrerebbe l'intero portale riga per riga.
+     */
+    private fun base(pls: List<String>, kids: Boolean, byKey: Boolean = false): Q {
+        val col = if (byKey) "+pl" else "pl"
+        val q = Q(if (pls.size == 1) "$col = ?" else "$col IN (" + pls.joinToString(",") { "?" } + ")", ArrayList(pls))
         if (kids) q.where += " AND adult = 0"
         return q
     }
@@ -151,7 +183,7 @@ object Db {
     private const val LIVE_COLS = "_id, k, pl, cat, num, name, logo, sid, url, epg, qkey, q, hevc"
 
     fun live(cat: String, pls: List<String>, kids: Boolean, favs: Set<String>): Cursor {
-        val q = base(pls, kids)
+        val q = base(pls, kids, byKey = cat == FAV)
         when (cat) {
             ALL -> {}
             FAV -> favIn(q, favs)
@@ -174,7 +206,7 @@ object Db {
     /* ---------------- film e serie ---------------- */
     /** [recent] = chiavi di «Continua a guardare», dalla più recente */
     fun vod(table: String, cat: String, pls: List<String>, kids: Boolean, text: String, favs: Set<String>, recent: List<String> = emptyList()): Cursor {
-        val q = base(pls, kids)
+        val q = base(pls, kids, byKey = cat == FAV || cat == REC)
         var order = "_id"
         val orderArgs = ArrayList<String>()
         when (cat) {
@@ -287,7 +319,7 @@ object Db {
         if (t.length < 2 || pls.isEmpty()) return emptyList()
         val out = ArrayList<Hit>()
         for ((table, img) in listOf("live" to "logo", "vod" to "img", "series" to "img")) {
-            val q = base(pls, kids)
+            val q = base(pls, kids, byKey = true) // nome «contiene»: lettura in fila della tabella, come prima
             q.where += " AND name LIKE ? ESCAPE '\\'"
             q.args.add("%" + like(t) + "%")
             r.rawQuery("SELECT _id, name, $img, cat, k FROM $table WHERE ${q.where} ORDER BY name LIMIT 60", q.args.toTypedArray()).use { c ->
