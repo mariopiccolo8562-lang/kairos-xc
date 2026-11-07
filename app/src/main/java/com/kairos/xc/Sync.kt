@@ -233,7 +233,7 @@ object Sync {
     private fun xtream(p: Playlist, st: Stmts, kind: String, step: (Int) -> Unit) {
         val known = HashMap<String, Boolean>() // categoria → per adulti
         val catAction = when (kind) { "live" -> "get_live_categories"; "vod" -> "get_vod_categories"; else -> "get_series_categories" }
-        eachObject(p.api(catAction) ?: return) { o ->
+        eachObject(p.api(catAction) ?: return, K_CAT) { o ->
             val id = o["category_id"] ?: return@eachObject
             val name = (o["category_name"] ?: "").trim().ifEmpty { "Altro" }
             val key = p.id + ":" + kind + ":" + id
@@ -254,7 +254,7 @@ object Sync {
         when (kind) {
             "live" -> {
                 var n = 0L
-                eachObject(p.api("get_live_streams") ?: return) { o ->
+                eachObject(p.api("get_live_streams") ?: return, K_LIVE) { o ->
                     val sid = o["stream_id"] ?: return@eachObject
                     val name = (o["name"] ?: "").trim()
                     val (cat, ad) = catOf(o["category_id"])
@@ -271,7 +271,7 @@ object Sync {
                     s.executeInsert()
                 }
             }
-            "vod" -> eachObject(p.api("get_vod_streams") ?: return) { o ->
+            "vod" -> eachObject(p.api("get_vod_streams") ?: return, K_VOD) { o ->
                 val sid = o["stream_id"] ?: return@eachObject
                 val name = (o["name"] ?: "").trim()
                 val (cat, ad) = catOf(o["category_id"])
@@ -283,7 +283,8 @@ object Sync {
                 s.bindLong(11, o["added"]?.toDoubleOrNull()?.toLong() ?: 0); s.bindLong(12, if (ad || adult(name)) 1 else 0)
                 s.executeInsert()
             }
-            else -> eachObject(p.api("get_series") ?: return) { o ->
+            // in modalità leggera la trama non si salva: non si legge nemmeno (testi lunghi, migliaia di serie)
+            else -> eachObject(p.api("get_series") ?: return, if (App.lite) K_SERIES_LITE else K_SERIES) { o ->
                 val sid = o["series_id"] ?: return@eachObject
                 val name = (o["name"] ?: "").trim()
                 val (cat, ad) = catOf(o["category_id"])
@@ -302,10 +303,12 @@ object Sync {
     }
 
     private val RX_YEAR = Regex("(19|20)\\d{2}")
+    /** anno tra parentesi nel titolo, es. «Dune (2021)»: compilata una volta sola, non per ognuno dei titoli */
+    private val RX_YEAR_NAME = Regex("\\((19|20)\\d{2}\\)")
     private fun yearOf(v: String?, name: String): String? {
         val t = v?.trim().orEmpty()
         RX_YEAR.find(t)?.let { return it.value }
-        return Regex("\\((19|20)\\d{2}\\)").find(name)?.value?.trim('(', ')')
+        return RX_YEAR_NAME.find(name)?.value?.trim('(', ')')
     }
 
     /**
@@ -325,24 +328,36 @@ object Sync {
         if (st.isNotEmpty() && !st.equals("Active", true)) throw Exception("linea «$st» sul server")
     }
 
-    /** ogni oggetto di un array JSON (o dei valori di un oggetto), letto a flusso */
-    private fun eachObject(url: String, fn: (HashMap<String, String>) -> Unit) {
+    /*
+     * Campi letti da ogni voce delle risposte Xtream: tutti gli altri (descrizioni, link diretti, valutazioni doppie…) si saltano
+     * senza crearne il valore. Con decine di migliaia di voci sono centinaia di migliaia di stringhe in meno per il garbage collector.
+     */
+    private val K_CAT = hashSetOf("category_id", "category_name")
+    private val K_LIVE = hashSetOf("stream_id", "name", "category_id", "num", "stream_icon", "epg_channel_id", "tv_archive", "tv_archive_duration")
+    private val K_VOD = hashSetOf("stream_id", "name", "category_id", "stream_icon", "container_extension", "rating", "year", "releasedate", "release_date", "added")
+    private val K_SERIES = hashSetOf("series_id", "name", "category_id", "cover", "rating", "releaseDate", "release_date", "year", "last_modified", "plot")
+    private val K_SERIES_LITE = K_SERIES - "plot"
+
+    /** ogni oggetto di un array JSON (o dei valori di un oggetto), letto a flusso; di ogni oggetto solo i campi [keys] */
+    private fun eachObject(url: String, keys: Set<String>, fn: (HashMap<String, String>) -> Unit) {
         val c = Http.open(url, connectMs = 20_000, readMs = 90_000)
         try {
             if (c.responseCode >= 400) throw Exception("il server delle playlist ha risposto HTTP ${c.responseCode}")
             val r = JsonReader(InputStreamReader(Http.stream(c), Charsets.UTF_8))
             r.isLenient = true
+            // una sola mappa per tutta la risposta (la si svuota a ogni voce): [fn] la legge subito e non la conserva
+            val m = HashMap<String, String>(32)
             // risposta vuota (alcuni server per le liste senza contenuti) = lista vuota
             val first = try { r.peek() } catch (_: java.io.EOFException) { return }
             when (first) {
                 JsonToken.BEGIN_ARRAY -> {
                     r.beginArray()
-                    while (r.hasNext()) { if (r.peek() == JsonToken.BEGIN_OBJECT) fn(flat(r)) else r.skipValue() }
+                    while (r.hasNext()) { if (r.peek() == JsonToken.BEGIN_OBJECT) fn(flat(r, m, keys)) else r.skipValue() }
                     r.endArray()
                 }
                 JsonToken.BEGIN_OBJECT -> {
                     r.beginObject()
-                    while (r.hasNext()) { r.nextName(); if (r.peek() == JsonToken.BEGIN_OBJECT) fn(flat(r)) else r.skipValue() }
+                    while (r.hasNext()) { r.nextName(); if (r.peek() == JsonToken.BEGIN_OBJECT) fn(flat(r, m, keys)) else r.skipValue() }
                     r.endObject()
                 }
                 // pagina HTML (blocco, errore del server…) o testo: non è una lista, le liste di prima restano
@@ -354,11 +369,12 @@ object Sync {
         }
     }
 
-    private fun flat(r: JsonReader): HashMap<String, String> {
-        val m = HashMap<String, String>(32)
+    private fun flat(r: JsonReader, m: HashMap<String, String>, keys: Set<String>): HashMap<String, String> {
+        m.clear()
         r.beginObject()
         while (r.hasNext()) {
             val k = r.nextName()
+            if (k !in keys) { r.skipValue(); continue } // campo non usato
             when (r.peek()) {
                 JsonToken.STRING, JsonToken.NUMBER -> m[k] = r.nextString()
                 JsonToken.BOOLEAN -> m[k] = r.nextBoolean().toString()
