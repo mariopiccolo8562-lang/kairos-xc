@@ -314,7 +314,8 @@ object Db {
     fun oneByK(table: String, k: String): Row? =
         if (k.isEmpty()) null else r.rawQuery("SELECT * FROM $table WHERE k = ? LIMIT 1", arrayOf(k)).use { c -> if (c.moveToFirst()) row(c) else null }
 
-    fun search(text: String, pls: List<String>, kids: Boolean): List<Hit> {
+    /** [cancel]: la ricerca si ferma a metà se il testo è già cambiato (OperationCanceledException) */
+    fun search(text: String, pls: List<String>, kids: Boolean, cancel: android.os.CancellationSignal? = null): List<Hit> {
         val t = text.trim()
         if (t.length < 2 || pls.isEmpty()) return emptyList()
         val out = ArrayList<Hit>()
@@ -322,7 +323,7 @@ object Db {
             val q = base(pls, kids, byKey = true) // nome «contiene»: lettura in fila della tabella, come prima
             q.where += " AND name LIKE ? ESCAPE '\\'"
             q.args.add("%" + like(t) + "%")
-            r.rawQuery("SELECT _id, name, $img, cat, k FROM $table WHERE ${q.where} ORDER BY name LIMIT 60", q.args.toTypedArray()).use { c ->
+            r.rawQuery("SELECT _id, name, $img, cat, k FROM $table WHERE ${q.where} ORDER BY name LIMIT 60", q.args.toTypedArray(), cancel).use { c ->
                 while (c.moveToNext()) out.add(Hit(table, c.getLong(0), c.getString(1) ?: "", c.getString(2) ?: "", c.getString(3) ?: "", c.getString(4) ?: ""))
             }
         }

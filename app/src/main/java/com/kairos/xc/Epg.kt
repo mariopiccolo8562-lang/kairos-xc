@@ -22,7 +22,8 @@ object Epg {
         val e = cache.get(p.id + ":" + sid + ":" + limit) ?: return null
         val now = System.currentTimeMillis()
         if (now - e.t > 10 * 60_000L) return null
-        return e.list.filter { it.end > now }
+        // chiamata a ogni riga della lista canali: la lista si copia solo se c'è davvero un programma già finito da togliere
+        return if (e.list.all { it.end > now }) e.list else e.list.filter { it.end > now }
     }
 
     /** programmi da adesso in poi (vuoto se il server non ha la guida) */

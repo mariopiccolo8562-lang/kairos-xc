@@ -19,6 +19,8 @@ class SearchActivity : BaseActivity() {
     private val adapter = HitAdapter()
     private var seq = 0
     private val searchR = Runnable { search() }
+    /** ricerca in corso: con un testo nuovo quella vecchia si ferma (non restano tre letture dell'archivio in parallelo) */
+    private var cancel: android.os.CancellationSignal? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -44,6 +46,7 @@ class SearchActivity : BaseActivity() {
     override fun onDestroy() {
         super.onDestroy()
         App.main.removeCallbacks(searchR)
+        cancel?.cancel()
     }
 
     private fun search() {
@@ -51,8 +54,10 @@ class SearchActivity : BaseActivity() {
         val my = ++seq
         val pls = K.activeIds()
         val kids = K.kids
+        cancel?.cancel()
+        val cs = android.os.CancellationSignal().also { cancel = it }
         bg {
-            val hits = Db.search(t, pls, kids)
+            val hits = try { Db.search(t, pls, kids, cs) } catch (_: android.os.OperationCanceledException) { return@bg }
             ui {
                 if (my != seq || isFinishing) return@ui
                 adapter.items = hits

@@ -65,8 +65,10 @@ object Ui {
         val n = av.removePrefix("a").toIntOrNull() ?: 1
         return AV[(n - 1).mod(AV.size)]
     }
+    /** spazi tra le parole: compilata una volta sola (le iniziali si calcolano a ogni riga della lista canali) */
+    private val WS = Regex("\\s+")
     fun initials(name: String): String =
-        name.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }.take(2).joinToString("") { it.substring(0, 1).uppercase(Locale.ITALY) }.ifEmpty { "?" }
+        name.trim().split(WS).filter { it.isNotEmpty() }.take(2).joinToString("") { it.substring(0, 1).uppercase(Locale.ITALY) }.ifEmpty { "?" }
 
     /** cerchio colorato con le iniziali (profili, account) */
     fun avatar(t: TextView, name: String, av: String, radiusDp: Int) {

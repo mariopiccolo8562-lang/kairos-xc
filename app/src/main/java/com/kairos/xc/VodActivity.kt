@@ -220,6 +220,16 @@ class VodActivity : BaseActivity() {
         if (curCat == Db.FAV) { pendingCat = catAdapter.items.find { it.id == Db.FAV }; load(keep = true) }
     }
 
+    /** voto «★ 7,3» per testo del server: String.format pesa sulle chiavette e i voti diversi sono pochi, si formatta una volta sola */
+    private val starsMemo = HashMap<String, String>()
+    private fun stars(raw: String): String = starsMemo[raw] ?: run {
+        val v = raw.toDoubleOrNull()?.takeIf { it > 0 }
+        val t = if (v == null) "" else "★ " + String.format(java.util.Locale.ITALY, "%.1f", if (v > 10) v / 10 else v)
+        if (starsMemo.size > 500) starsMemo.clear()
+        starsMemo[raw] = t
+        t
+    }
+
     private inner class PosterAdapter : CursorAdapter<PosterAdapter.H>() {
         inner class H(v: View) : RecyclerView.ViewHolder(v) {
             val img: ImageView = v.findViewById(R.id.img)
@@ -254,8 +264,8 @@ class VodActivity : BaseActivity() {
             h.title.text = name
             h.ph.text = name
             val year = c.getString(10) ?: ""
-            val rating = (c.getString(9) ?: "").toDoubleOrNull()?.takeIf { it > 0 }
-            h.meta.text = listOfNotNull(year.ifEmpty { null }, rating?.let { "★ " + String.format(java.util.Locale.ITALY, "%.1f", if (it > 10) it / 10 else it) }).joinToString(" · ")
+            val r = stars(c.getString(9) ?: "")
+            h.meta.text = if (year.isEmpty()) r else if (r.isEmpty()) year else "$year · $r"
             // «Leggerissima»: locandine decodificate più piccole (un terzo della memoria in meno)
             if (App.max) Ui.img(h.img, c.getString(5), posterW * 2 / 3, posterH * 2 / 3, Img.POSTER) else Ui.img(h.img, c.getString(5), posterW, posterH, Img.POSTER)
         }
