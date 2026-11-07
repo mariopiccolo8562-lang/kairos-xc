@@ -257,7 +257,13 @@ class VodActivity : BaseActivity() {
             val rating = (c.getString(9) ?: "").toDoubleOrNull()?.takeIf { it > 0 }
             h.meta.text = listOfNotNull(year.ifEmpty { null }, rating?.let { "★ " + String.format(java.util.Locale.ITALY, "%.1f", if (it > 10) it / 10 else it) }).joinToString(" · ")
             // «Leggerissima»: locandine decodificate più piccole (un terzo della memoria in meno)
-            if (App.max) Ui.img(h.img, c.getString(5), posterW * 2 / 3, posterH * 2 / 3) else Ui.img(h.img, c.getString(5), posterW, posterH)
+            if (App.max) Ui.img(h.img, c.getString(5), posterW * 2 / 3, posterH * 2 / 3, Img.POSTER) else Ui.img(h.img, c.getString(5), posterW, posterH, Img.POSTER)
         }
+
+        // riga uscita dallo schermo: il suo caricamento si annulla e la locandina torna libera
+        override fun onViewRecycled(h: H) { Img.clear(h.img) }
     }
+
+    override fun releaseImages() = grid.releaseImages()
+    override fun restoreImages() = grid.restoreImages()
 }

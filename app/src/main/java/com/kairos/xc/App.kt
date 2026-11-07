@@ -9,13 +9,6 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import com.bumptech.glide.Glide
-import com.bumptech.glide.GlideBuilder
-import com.bumptech.glide.load.DecodeFormat
-import com.bumptech.glide.load.engine.bitmap_recycle.LruBitmapPool
-import com.bumptech.glide.load.engine.cache.InternalCacheDiskCacheFactory
-import com.bumptech.glide.load.engine.cache.LruResourceCache
-import com.bumptech.glide.request.RequestOptions
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -32,23 +25,14 @@ class App : Application() {
         Db.init(this)
         lite = detectLite()
         max = Store.liteMode == "max"
-        // immagini: memoria e spazio su disco limitati (le chiavette hanno 1 GB di RAM e poco spazio)
-        try {
-            val mem = if (max) 4L shl 20 else if (lite) 6L shl 20 else 20L shl 20
-            Glide.init(this, GlideBuilder()
-                .setMemoryCache(LruResourceCache(mem))
-                .setBitmapPool(LruBitmapPool(mem / 2))
-                // cartella predefinita di Glide: la cache della 1.0 (fino a 250 MB) viene ridotta, non lasciata lì
-                .setDiskCache(InternalCacheDiskCacheFactory(this, if (max) 25L shl 20 else if (lite) 40L shl 20 else 120L shl 20))
-                .setDefaultRequestOptions(RequestOptions().format(if (lite) DecodeFormat.PREFER_RGB_565 else DecodeFormat.PREFER_ARGB_8888))
-                .setLogLevel(android.util.Log.ERROR))
-        } catch (_: Throwable) {}
+        // immagini: memoria e spazio su disco con un tetto per classe del dispositivo (vedi Img)
+        Img.glide()
         // file dell'aggiornamento già installato: via, le chiavette hanno poco spazio
         bg {
             for (d in listOfNotNull(java.io.File(cacheDir, "apk"), externalCacheDir)) java.io.File(d, "kairos-xc-update.apk").takeIf { it.exists() }?.delete()
         }
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
-            override fun onActivityCreated(a: Activity, b: Bundle?) {}
+            override fun onActivityCreated(a: Activity, b: Bundle?) { alive.add(a) }
             override fun onActivityStarted(a: Activity) {
                 started++
                 if (started == 1) Pulse.foreground(true)
@@ -60,18 +44,19 @@ class App : Application() {
                 if (started <= 0) { started = 0; Pulse.foreground(false) }
             }
             override fun onActivitySaveInstanceState(a: Activity, b: Bundle) {}
-            override fun onActivityDestroyed(a: Activity) {}
+            override fun onActivityDestroyed(a: Activity) { alive.remove(a) }
         })
     }
 
+    // poca memoria o app non più visibile: la cache delle immagini si svuota
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
-        try { Glide.get(this).trimMemory(level) } catch (_: Throwable) {}
+        Img.trim(level)
     }
 
     override fun onLowMemory() {
         super.onLowMemory()
-        try { Glide.get(this).clearMemory() } catch (_: Throwable) {}
+        Img.trim(android.content.ComponentCallbacks2.TRIM_MEMORY_COMPLETE)
     }
 
     fun detectLite(): Boolean = when (Store.liteMode) {
@@ -99,6 +84,8 @@ class App : Application() {
         val io: ExecutorService = Executors.newFixedThreadPool(3) { r -> Thread(r, "kx-io").apply { isDaemon = true } }
         var started = 0
         var top: Activity? = null
+        /** schermate create e non ancora distrutte (thread principale): entrando nel lettore lasciano andare le immagini */
+        val alive = ArrayList<Activity>()
     }
 }
 

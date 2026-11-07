@@ -358,6 +358,10 @@ class PlayerActivity : BaseActivity() {
 
     override fun onStart() {
         super.onStart()
+        // memoria delle immagini liberata prima del lettore: il buffer video ha spazio. Le schermate già ferme sotto lasciano
+        // andare sfondi e locandine (quella da cui si è partiti lo fa nel suo onStop); al ritorno si ricaricano dal disco
+        Img.playerOn()
+        for (a in App.alive.toList()) if (a !== this && a is BaseActivity && a.stopped) a.releaseForPlayer()
         if (player == null) {
             newPlayer()
             Pulse.stats = { stats() }
@@ -390,6 +394,7 @@ class PlayerActivity : BaseActivity() {
         Line.save(true)
         Pulse.stats = null
         Pulse.watch(null)
+        Img.playerOff() // cache delle immagini di nuovo alla misura normale
     }
 
     override fun onDestroy() {
@@ -1426,6 +1431,7 @@ class PlayerActivity : BaseActivity() {
 
     /* ---------------- telecomando ---------------- */
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        Img.key(this, event) // zapping col tasto tenuto premuto: i loghi aspettano il rilascio
         val shown = bottom.visibility == View.VISIBLE
         if (event.action == KeyEvent.ACTION_DOWN && shown) bump()
         // comandi nascosti: frecce e OK li gestisce il lettore, mai un pulsante rimasto selezionato

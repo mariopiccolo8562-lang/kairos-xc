@@ -93,9 +93,28 @@ class DetailActivity : BaseActivity() {
         findViewById<TextView>(R.id.title).text = title
         findViewById<TextView>(R.id.plot).text = r.s("plot")
         meta(r.s("year"), r.s("rating"), "", "")
-        Ui.img(findViewById(R.id.poster), poster, resources.getDimensionPixelSize(R.dimen.poster_w), resources.getDimensionPixelSize(R.dimen.poster_h))
+        showPoster()
         favBtn.setImageResource(if (Store.isFav(table, key)) R.drawable.ic_heart_fill else R.drawable.ic_heart)
         refreshButtons()
+    }
+
+    private fun showPoster() {
+        Ui.img(findViewById(R.id.poster), poster, resources.getDimensionPixelSize(R.dimen.poster_w), resources.getDimensionPixelSize(R.dimen.poster_h), Img.POSTER)
+    }
+
+    // sotto il lettore: sfondo, locandina ed episodi via dalla memoria; al ritorno si ricaricano dalla cache su disco
+    override fun releaseImages() {
+        Img.clear(findViewById(R.id.backdrop))
+        Img.clear(findViewById(R.id.poster))
+        findViewById<RecyclerView>(R.id.episodes).releaseImages()
+    }
+
+    override fun restoreImages() {
+        if (row == null) return
+        showPoster()
+        val b = backdrop
+        if (b.isNotEmpty()) { backdrop = ""; setBackdrop(b); if (backdrop.isEmpty()) backdrop = b }
+        // gli episodi si ridisegnano già in onResume
     }
 
     private fun meta(year: String, rating: String, genre: String, dur: String) {
@@ -107,8 +126,9 @@ class DetailActivity : BaseActivity() {
         if (url.isEmpty() || url == backdrop || App.max) return // «Leggerissima»: basta la locandina
         backdrop = url
         val iv = findViewById<ImageView>(R.id.backdrop)
-        val w = if (App.lite) 640 else 1280
-        Ui.img(iv, url, w, w * 9 / 16)
+        // mai più largo dello schermo (e al massimo 1280 pixel)
+        val w = minOf(if (App.lite) 640 else 1280, resources.displayMetrics.widthPixels.takeIf { it > 0 } ?: 1280)
+        Ui.img(iv, url, w, w * 9 / 16, Img.BACKDROP)
     }
 
     /* ---------------- dati dal server ---------------- */
@@ -320,7 +340,10 @@ class DetailActivity : BaseActivity() {
             h.bar.visibility = if (pos > 0 && dur > 0) View.VISIBLE else View.GONE
             h.bar.progress = if (dur > 0) (pos * 100 / dur).toInt() else 0
             val w = resources.getDimensionPixelSize(R.dimen.ep_w)
-            Ui.img(h.img, e.img.ifEmpty { backdrop.ifEmpty { poster } }, w, w * 9 / 16)
+            Ui.img(h.img, e.img.ifEmpty { backdrop.ifEmpty { poster } }, w, w * 9 / 16, Img.BACKDROP)
         }
+
+        // episodio uscito dallo schermo: il caricamento si annulla
+        override fun onViewRecycled(h: H) { Img.clear(h.img) }
     }
 }

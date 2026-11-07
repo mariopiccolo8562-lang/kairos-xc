@@ -7,7 +7,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.recyclerview.widget.LinearLayoutManager
-import com.bumptech.glide.Glide
 import androidx.recyclerview.widget.RecyclerView
 
 /** Adapter sopra un Cursor SQLite: legge solo le righe che si vedono */
@@ -40,20 +39,38 @@ abstract class CursorAdapter<VH : RecyclerView.ViewHolder> : RecyclerView.Adapte
     abstract fun bind(h: VH, c: Cursor, position: Int)
 }
 
+/** righe fuori schermo tenute pronte per tornare indietro al volo */
+private fun viewCache(): Int = if (App.lite) 6 else 14
+
 /** liste veloci: niente animazioni, cache di viste, dimensione fissa */
 fun RecyclerView.fast(horizontal: Boolean = false) {
     itemAnimator = null
     setHasFixedSize(true)
-    setItemViewCacheSize(if (App.lite) 6 else 14)
+    setItemViewCacheSize(viewCache())
     if (layoutManager == null) layoutManager = LinearLayoutManager(context, if (horizontal) RecyclerView.HORIZONTAL else RecyclerView.VERTICAL, false)
-    // tasto tenuto premuto: si scorre senza caricare le immagini, che arrivano appena ci si ferma
+    // in modalità leggera si scorre senza caricare le immagini, che arrivano appena ci si ferma (tasto tenuto premuto: sempre, vedi Img)
     addOnScrollListener(object : RecyclerView.OnScrollListener() {
+        private var on = false
         override fun onScrollStateChanged(rv: RecyclerView, state: Int) {
-            try {
-                if (state == RecyclerView.SCROLL_STATE_IDLE) Glide.with(rv).resumeRequests() else if (App.lite) Glide.with(rv).pauseRequests()
-            } catch (_: Exception) {}
+            val now = state != RecyclerView.SCROLL_STATE_IDLE
+            if (now != on) { on = now; Img.scrolling(rv, now) }
         }
     })
+}
+
+/** sopra c'è il lettore: le immagini della lista (righe visibili, tenute pronte e da riusare) si lasciano andare */
+fun RecyclerView.releaseImages() {
+    for (i in 0 until childCount) Img.clearAll(getChildAt(i))
+    // le righe tenute pronte passano fra quelle da riusare (onViewRecycled le svuota), poi si buttano
+    setItemViewCacheSize(0)
+    recycledViewPool.clear()
+    setItemViewCacheSize(viewCache())
+}
+
+/** di ritorno dal lettore: le righe visibili si ridisegnano e ricaricano le immagini (dalla cache su disco) */
+fun RecyclerView.restoreImages() {
+    val n = adapter?.itemCount ?: 0
+    if (n > 0) adapter?.notifyItemRangeChanged(0, n)
 }
 
 /** colonna delle categorie (Diretta, Film, Serie) */

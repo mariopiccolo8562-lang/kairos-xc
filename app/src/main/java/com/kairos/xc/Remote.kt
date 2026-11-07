@@ -4,7 +4,6 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
-import com.bumptech.glide.Glide
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.system.exitProcess
@@ -128,7 +127,7 @@ object Remote {
     private fun clearAll() {
         try { Db.clear(Db.w) } catch (_: Exception) {}
         try { Store.clearSync() } catch (_: Exception) {}
-        try { Glide.get(App.I).clearDiskCache() } catch (_: Throwable) {}
+        try { Img.glide().clearDiskCache() } catch (_: Throwable) {}
         try { App.I.cacheDir.deleteRecursively() } catch (_: Exception) {}
     }
 }

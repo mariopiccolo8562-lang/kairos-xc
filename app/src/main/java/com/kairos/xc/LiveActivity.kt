@@ -510,5 +510,8 @@ class LiveActivity : BaseActivity() {
                 h.bar.visibility = View.GONE
             }
         }
+
+        // riga uscita dallo schermo: il caricamento del logo si annulla
+        override fun onViewRecycled(h: H) { Img.clear(h.logo) }
     }
 }

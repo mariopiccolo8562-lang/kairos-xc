@@ -13,6 +13,7 @@ import android.widget.TextView
  * Leggera: niente liste né database qui, solo pulsanti; lo sfondo è un'unica immagine piccola.
  */
 class HomeActivity : BaseActivity() {
+    private companion object { val CIRCLES = intArrayOf(R.id.live, R.id.film, R.id.series) }
     private lateinit var portal: TextView
     private lateinit var portalSub: TextView
     private lateinit var sync: TextView
@@ -87,6 +88,17 @@ class HomeActivity : BaseActivity() {
     override fun onDestroy() {
         super.onDestroy()
         Sync.unlisten(syncL)
+    }
+
+    // sotto il lettore: via lo sfondo (1280×720) e i cerchi (360×360), tornano appena la Home si rivede
+    override fun releaseImages() {
+        findViewById<ImageView>(R.id.bg).setImageDrawable(null)
+        for (id in CIRCLES) findViewById<View>(id).background = null
+    }
+
+    override fun restoreImages() {
+        if (!App.max) findViewById<ImageView>(R.id.bg).setImageResource(R.drawable.home_bg)
+        for (id in CIRCLES) findViewById<View>(id).setBackgroundResource(R.drawable.home_circle)
     }
 
     override fun onStateChanged() {

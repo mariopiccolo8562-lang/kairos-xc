@@ -13,9 +13,6 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
-import com.bumptech.glide.Glide
-import com.bumptech.glide.load.DecodeFormat
-import com.bumptech.glide.load.engine.DiskCacheStrategy
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -81,17 +78,8 @@ object Ui {
         t.text = initials(name)
     }
 
-    /** immagine ridimensionata alla misura mostrata; a 16 bit in modalità leggera (metà memoria) */
-    fun img(v: ImageView, url: String?, w: Int, h: Int) {
-        if (url.isNullOrBlank() || !url.startsWith("http")) {
-            Glide.with(v).clear(v)
-            v.setImageDrawable(null)
-            return
-        }
-        var rq = Glide.with(v).load(url).override(w, h).dontAnimate().diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
-        if (App.lite) rq = rq.format(DecodeFormat.PREFER_RGB_565)
-        rq.into(v)
-    }
+    /** immagine decodificata alla misura mostrata ([w]×[h] pixel), a 16 bit sui dispositivi deboli; [kind]: vedi [Img] */
+    fun img(v: ImageView, url: String?, w: Int, h: Int, kind: Int = Img.LOGO) = Img.load(v, url, w, h, kind)
 
     fun dialog(a: Activity, title: String, msg: String, ok: String = "OK", cancel: String? = null, onOk: (() -> Unit)? = null): AlertDialog? {
         if (a.isFinishing) return null

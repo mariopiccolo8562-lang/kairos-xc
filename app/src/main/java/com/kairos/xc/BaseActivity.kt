@@ -66,8 +66,51 @@ abstract class BaseActivity : Activity() {
         if (App.lite) overridePendingTransition(0, 0)
     }
 
+    /** schermata non visibile (dopo onStop): entrando nel lettore lascia andare le immagini */
+    var stopped = false
+        private set
+    /** immagini lasciate andare perché sopra c'è il lettore: si ricaricano al ritorno */
+    private var imgReleased = false
+
+    override fun onStart() {
+        super.onStart()
+        stopped = false
+        if (imgReleased) {
+            imgReleased = false
+            window.setBackgroundDrawableResource(R.drawable.app_window)
+            restoreImages()
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        stopped = true
+        // si è appena aperto il lettore sopra questa schermata
+        if (this !is PlayerActivity && App.top is PlayerActivity) releaseForPlayer()
+    }
+
+    /** sopra c'è il lettore: sfondi e locandine di questa schermata via dalla memoria (il buffer video ha spazio) */
+    fun releaseForPlayer() {
+        if (imgReleased || this is PlayerActivity || this is ActivationActivity) return
+        imgReleased = true
+        releaseImages()
+        // sfondo della finestra (immagine 960×540): un colore pieno finché la schermata è sotto il lettore
+        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(androidx.core.content.ContextCompat.getColor(this, R.color.bg)))
+        Img.free()
+    }
+
+    /** immagini grandi della schermata da lasciare andare / da ricaricare (dalla cache su disco) */
+    open fun releaseImages() {}
+    open fun restoreImages() {}
+
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        Img.key(this, event) // tasto tenuto premuto: i caricamenti delle immagini aspettano il rilascio
+        return super.dispatchKeyEvent(event)
+    }
+
     override fun onResume() {
         super.onResume()
+        Img.reset(this)
         if (needsActive) {
             val s = Panel.state ?: Panel.loadCached()
             if (s == null || !s.active) { goActivation(); return }

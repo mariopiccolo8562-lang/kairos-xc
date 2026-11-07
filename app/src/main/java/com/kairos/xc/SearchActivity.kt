@@ -92,7 +92,10 @@ class SearchActivity : BaseActivity() {
             h.name.text = x.name
             h.kind.text = when (x.table) { "live" -> "CANALE"; "vod" -> "FILM"; else -> "SERIE" }
             val s = Ui.dp(h.itemView.context, 36)
-            Ui.img(h.img, x.img, s, s)
+            Ui.img(h.img, x.img, s, s, if (x.table == "live") Img.LOGO else Img.POSTER)
         }
+
+        // risultato uscito dallo schermo: il caricamento si annulla
+        override fun onViewRecycled(h: H) { Img.clear(h.img) }
     }
 }
