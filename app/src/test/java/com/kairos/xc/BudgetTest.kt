@@ -10,9 +10,9 @@ class BudgetTest {
 
     private fun s(
         sinceBoot: Long = 120_000L, menu: Boolean = true, playing: Boolean = false, smart: Boolean = true, dev: String = "N",
-        loaded: Boolean = true, caps: Boolean = true, dirty: Boolean = false, check: Long = 1L, guide: Long = 1L, remind: Long = 1L,
+        loaded: Boolean = true, caps: Boolean = true, dirty: Boolean = false, deadDirty: Boolean = false, check: Long = 1L, guide: Long = 1L, remind: Long = 1L,
         remindOn: Boolean = true, chans: Boolean = true, follows: Boolean = true, now: Long = boot + sinceBoot,
-    ) = Budget.S(now, boot, menu, playing, smart, dev, loaded, caps, dirty, check, guide, remind, remindOn, chans, follows)
+    ) = Budget.S(now, boot, menu, playing, smart, dev, loaded, caps, dirty, deadDirty, check, guide, remind, remindOn, chans, follows)
 
     @Test
     fun nienteNeiPrimiSessantaSecondi() {
@@ -33,6 +33,9 @@ class BudgetTest {
         assertEquals(Budget.Job.LOAD, Budget.next(s(smart = false, loaded = false)))
         assertEquals(Budget.Job.CAPS, Budget.next(s(smart = false, caps = false)))
         assertNull(Budget.next(s(smart = false, check = 0L, guide = 0L, remind = 0L, dirty = true)))
+        // l'elenco dei canali non funzionanti (sempre attivo) si scrive sul disco nei menu anche con le funzioni spente
+        assertEquals(Budget.Job.FLUSH, Budget.next(s(smart = false, deadDirty = true)))
+        assertNull(Budget.next(s(smart = false, deadDirty = true, playing = true)))
     }
 
     @Test

@@ -69,7 +69,7 @@ object Smart {
         if (busy.get()) return
         val now = SystemClock.elapsedRealtime()
         val s = Budget.S(
-            now, App.bootAt, menu(), playing(), on(), Line.device(), ready(), DevCaps.known, dirty(),
+            now, App.bootAt, menu(), playing(), on(), Line.device(), ready(), DevCaps.known, dirty(), Dead.dirty,
             lastCheck, lastGuide, lastRemind, Store.autoRem, HabitStore.chans(), HabitStore.follows(),
         )
         val job = Budget.next(s) ?: return
@@ -84,7 +84,7 @@ object Smart {
         when (j) {
             Budget.Job.LOAD -> { prefs(); Dead.load(); DevCaps.load(); if (on()) { Engines.load(); Zap.load(); AutoCheck.load(); HabitStore.book(); mem = true } }
             Budget.Job.CAPS -> DevCaps.read()
-            Budget.Job.FLUSH -> { HabitStore.commit(); Engines.save(); Zap.save() }
+            Budget.Job.FLUSH -> { Dead.save(); if (on()) { HabitStore.commit(); Engines.save(); Zap.save() } }
             // interrotto da una visione: si riprova tra 2 minuti, non tra mezz'ora
             Budget.Job.CHECK -> lastCheck = if (AutoCheck.run()) t else t - Budget.checkEvery(Line.device()) + 2 * 60_000L
             Budget.Job.GUIDE -> { Guide.refresh(); lastGuide = t }
@@ -97,7 +97,7 @@ object Smart {
      * sospeso vanno sul disco subito, altrimenti Android potrebbe chiudere l'app prima del prossimo giro nei menu.
      */
     fun background() {
-        if (!on() || !ready() || !dirty() || !busy.compareAndSet(false, true)) return
+        if (!ready() || !(Dead.dirty || (on() && dirty())) || !busy.compareAndSet(false, true)) return
         exec.execute { try { run(Budget.Job.FLUSH) } catch (t: Throwable) { Log.w("KairosXC", "smart flush", t) } finally { busy.set(false) } }
     }
 
@@ -200,6 +200,9 @@ object Dead {
     /** elenco arrivato prima che il file fosse letto (primi 60 s): si applica alla lettura */
     @Volatile private var pending: JSONObject? = null
     private var savedAt = 0L
+    /** elenco nuovo (o confermato da molto) da scrivere sul disco: nei menu, mai durante la visione */
+    @Volatile var dirty = false
+        private set
     /** cambia con l'elenco: le liste aperte si rileggono */
     @Volatile var gen = 0
         private set
@@ -218,7 +221,16 @@ object Dead {
         val b = book ?: return
         val now = System.currentTimeMillis()
         b.at = now
-        if (b.all.isNotEmpty() && now - savedAt > 6 * 3_600_000L) { savedAt = now; Smart.prefs().edit().putString("dead", b.save()).apply() }
+        if (b.all.isNotEmpty() && now - savedAt > 6 * 3_600_000L) dirty = true
+    }
+
+    /** lavoro FLUSH (thread di lavoro) */
+    fun save() {
+        val b = book ?: return
+        if (!dirty) return
+        dirty = false
+        savedAt = System.currentTimeMillis()
+        Smart.prefs().edit().putString("dead", b.save()).apply()
     }
 
     /** thread di lavoro */
@@ -233,11 +245,9 @@ object Dead {
         val a = d.optJSONArray("l")
         val l = ArrayList<String>()
         if (a != null) for (i in 0 until minOf(a.length(), DeadBook.MAX)) a.optString(i).takeIf { it.isNotEmpty() }?.let { l.add(it.lowercase(Locale.ROOT)) }
-        val b = DeadBook(d.optString("v").take(16), l, System.currentTimeMillis())
-        book = b
+        book = DeadBook(d.optString("v").take(16), l, System.currentTimeMillis())
         gen++
-        savedAt = b.at
-        Smart.prefs().edit().putString("dead", b.save()).apply()
+        dirty = true
     }
 
     /** numero del flusso nelle liste M3U di tipo Xtream (ultimo pezzo dell'indirizzo, senza estensione), calcolato da SQLite */

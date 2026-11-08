@@ -230,9 +230,10 @@ object Budget {
     fun guideChannels(dev: String): Int = if (dev == "D") 4 else 8
     fun guidePerRun(dev: String): Int = if (dev == "D") 2 else 4
 
+    /** [dirty] = memorie delle funzioni accese da salvare · [deadDirty] = elenco dei canali non funzionanti da salvare (sempre attivo) */
     class S(
         val now: Long, val boot: Long, val menu: Boolean, val playing: Boolean, val smart: Boolean, val dev: String,
-        val loaded: Boolean, val capsKnown: Boolean, val dirty: Boolean,
+        val loaded: Boolean, val capsKnown: Boolean, val dirty: Boolean, val deadDirty: Boolean,
         val lastCheck: Long, val lastGuide: Long, val lastRemind: Long, val remindOn: Boolean,
         /** canali guardati di solito (la guida piccola li copre) · programmi o squadre seguiti (promemoria) */
         val chans: Boolean, val follows: Boolean,
@@ -246,6 +247,7 @@ object Budget {
         if (!canWork(s)) return null
         if (!s.loaded) return Job.LOAD
         if (!s.capsKnown) return Job.CAPS
+        if (s.deadDirty) return Job.FLUSH
         if (!s.smart) return null
         if (s.dirty) return Job.FLUSH
         if (s.lastCheck == 0L || s.now - s.lastCheck >= checkEvery(s.dev)) return Job.CHECK
