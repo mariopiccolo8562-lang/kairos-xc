@@ -336,6 +336,7 @@ class LiveActivity : BaseActivity() {
 
     private fun startVideo() {
         if (!previewOn() || isFinishing) return
+        if (Updater.blocked(this)) return // aggiornamento obbligatorio: prima l'installazione
         val r = curRow ?: return
         val full = Play.liveUrls(r).firstOrNull() ?: run { playRow(r.l("_id"), r.s("k")); return }
         // canale diverso già in anteprima: si chiude prima (un decoder e una visione alla volta per il pannello)
@@ -424,6 +425,7 @@ class LiveActivity : BaseActivity() {
     }
 
     private fun playRow(id: Long, k: String) {
+        if (Updater.blocked(this)) return // aggiornamento obbligatorio: prima l'installazione
         stopVideo()
         releaseVideo() // un solo decoder alla volta: l'anteprima si chiude prima dello schermo intero
         Store.setLastLive(id, k)

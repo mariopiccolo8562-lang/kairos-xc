@@ -71,6 +71,7 @@ class SearchActivity : BaseActivity() {
     private fun openHit(h: Db.Hit) {
         when (h.table) {
             "live" -> {
+                if (Updater.blocked(this)) return // aggiornamento obbligatorio: prima l'installazione
                 Store.setLastLive(h.id, h.k)
                 startActivity(Intent(this, PlayerActivity::class.java).putExtra("kind", "live").putExtra("cat", h.cat).putExtra("rowId", h.id))
             }

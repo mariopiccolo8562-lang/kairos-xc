@@ -295,6 +295,8 @@ class PlayerActivity : BaseActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // aggiornamento obbligatorio scaduto: nessuna visione, si torna al menu dove compare il blocco
+        if (Updater.must()) { finish(); return }
         setContentView(R.layout.activity_player)
         pv = findViewById(R.id.pv)
         spin = findViewById(R.id.spin)
@@ -1046,6 +1048,8 @@ class PlayerActivity : BaseActivity() {
     /** [variant] = un'altra versione dello stesso canale (qualità adattiva), non un cambio canale */
     private fun tune(id: Long, variant: Boolean = false) {
         if (id <= 0 || kicked) return
+        // cambio canale con l'aggiornamento obbligatorio ormai scaduto: si esce, nel menu c'è il blocco
+        if (!variant && Updater.must()) { leave(); return }
         if (!variant) {
             closeProblem() // problema del canale di prima: il cliente è passato oltre
             setSoft(false, null)
@@ -1236,6 +1240,8 @@ class PlayerActivity : BaseActivity() {
     /* ---------------- film ed episodi ---------------- */
     private fun startVod() {
         if (kicked) return
+        // anche l'episodio successivo che parte da solo: con l'aggiornamento obbligatorio scaduto si torna al menu
+        if (Updater.must()) { finish(); return }
         nameV.text = vodTitle
         subV.text = vodSub
         val st = kind

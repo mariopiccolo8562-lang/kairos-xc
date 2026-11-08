@@ -83,10 +83,12 @@ object Ui {
     /** immagine decodificata alla misura mostrata ([w]×[h] pixel), a 16 bit sui dispositivi deboli; [kind]: vedi [Img] */
     fun img(v: ImageView, url: String?, w: Int, h: Int, kind: Int = Img.LOGO) = Img.load(v, url, w, h, kind)
 
-    fun dialog(a: Activity, title: String, msg: String, ok: String = "OK", cancel: String? = null, onOk: (() -> Unit)? = null): AlertDialog? {
+    /** [onCancel]: «[cancel]» o INDIETRO (es. «Più tardi» sulla proposta di aggiornamento, poi parte il contenuto che aspettava) */
+    fun dialog(a: Activity, title: String, msg: String, ok: String = "OK", cancel: String? = null, onCancel: (() -> Unit)? = null, onOk: (() -> Unit)? = null): AlertDialog? {
         if (a.isFinishing) return null
         val b = AlertDialog.Builder(a).setTitle(title).setMessage(msg).setPositiveButton(ok) { _, _ -> onOk?.invoke() }
-        if (cancel != null) b.setNegativeButton(cancel, null)
+        if (cancel != null) b.setNegativeButton(cancel, if (onCancel == null) null else android.content.DialogInterface.OnClickListener { _, _ -> onCancel() })
+        if (onCancel != null) b.setOnCancelListener { onCancel() }
         return try { b.show() } catch (_: Exception) { null }
     }
 

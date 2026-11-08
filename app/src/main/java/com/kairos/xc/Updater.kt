@@ -45,6 +45,36 @@ object Updater {
     @Volatile private var askedCode = 0
     @Volatile private var lastCheck = 0L
     @Volatile private var prefetchFailed = 0
+    /** proposta (non obbligatoria) a video in questo momento e contenuto che parte dopo «Più tardi» (thread principale) */
+    private var offerDlg: AlertDialog? = null
+    private var afterLater: (() -> Unit)? = null
+    /** «Installa ora» premuto senza il permesso di Android: l'installazione riparte da sola al ritorno nell'app */
+    @Volatile private var afterPerm: File? = null
+    /** «Aggiorna ora» mentre l'APK si scaricava già in sottofondo: si installa appena è pronto */
+    @Volatile private var installWhenReady = false
+
+    /**
+     * All'apertura dell'app, prima di ogni schermata: la versione nuova trovata l'ultima volta torna dal disco, con il suo APK
+     * se è già scaricato. Così il blocco dell'aggiornamento obbligatorio vale subito, anche senza rete e prima di qualunque
+     * canale, e la proposta normale compare nel primo menu. L'APK si ricontrolla (app, versione, firma) in sottofondo.
+     */
+    fun restore() {
+        val code = Store.updCode
+        if (code <= 0) return
+        val url = Store.updUrl
+        if (code <= BuildConfig.VERSION_CODE || !url.startsWith("https://")) { Store.saveUpd(0, "", ""); return } // già installata
+        val u = Upd(code, Store.updVer, url)
+        pending = u
+        val f = fileFor(u)
+        if (!f.isFile || f.length() < 300_000) return
+        ready = f
+        bg {
+            if (staged(u) == null && pending?.code == u.code && ready == f) {
+                ready = null // non è più valido: si riscarica, il blocco torna quando è pronto
+                ui { try { lock?.dismiss() } catch (_: Exception) {}; lock = null }
+            }
+        }
+    }
 
     /** l'app torna in primo piano: nuovo controllo e, se c'è già una versione nuova, la si propone di nuovo */
     fun onForeground() {
@@ -84,12 +114,13 @@ object Updater {
             firstSeen(u)
             if (pending?.code != code) { ready = null; prefetchFailed = 0 }
             pending = u
+            Store.saveUpd(u.code, u.ver, u.url) // su disco: alla prossima apertura vale subito, anche senza rete
             staged(u)?.let { ready = it } // già scaricato in un'apertura precedente
             if (ready == null && manual == null && (Store.bgUpdate || force) && (force || !metered()) && prefetchFailed < 3) prefetch(u)
             ui { if (manual != null) prompt(manual, u) else offer(App.top) }
             return u
         }
-        if (apk != null) { pending = null; ready = null; try { lock?.dismiss() } catch (_: Exception) {}; lock = null }
+        if (apk != null) { pending = null; ready = null; Store.saveUpd(0, "", ""); try { lock?.dismiss() } catch (_: Exception) {}; lock = null }
         else if (manual == null) lastCheck = SystemClock.elapsedRealtime() - 55 * 60_000L // rete giù: si riprova tra 5 minuti
         if (manual != null) ui { Ui.toast(if (apk == null) "Impossibile controllare gli aggiornamenti adesso" else "Hai già l'ultima versione (${BuildConfig.VERSION_NAME})") }
         return null
@@ -127,7 +158,13 @@ object Updater {
             ready = out
             prefetchFailed = 0
             cleanOld(out)
-            ui { askedCode = 0; offer(App.top) }
+            ui {
+                // il cliente aveva già premuto «Aggiorna ora»: si installa subito, senza chiederlo di nuovo
+                val a = App.top
+                if (installWhenReady && a != null && a !is PlayerActivity && !a.isFinishing) { install(a, out); return@ui }
+                askedCode = 0
+                offer(App.top)
+            }
         } catch (_: Paused) {
             try { fileFor(u).delete() } catch (_: Exception) {}
             lastCheck = SystemClock.elapsedRealtime() - 55 * 60_000L // non è un errore: si riprova tra 5 minuti
@@ -187,14 +224,47 @@ object Updater {
         return System.currentTimeMillis() - firstSeen(u) >= days * 86_400_000L
     }
 
-    /** propone la versione nuova (una volta per apertura, sempre se obbligatoria) appena si è in un menu; ogni schermata la chiama all'apertura */
+    /**
+     * Propone la versione nuova (una volta per apertura, sempre se obbligatoria) appena si è in un menu; ogni schermata la chiama
+     * all'apertura e al ritorno. Una proposta arrivata durante la visione compare così al ritorno nel menu, mai dietro il lettore.
+     */
     fun offer(a: Activity?) {
-        val u = pending ?: return
         if (a == null || a.isFinishing || a is PlayerActivity) return
+        if (resumeInstall(a)) return
+        val u = pending ?: return
         if (must()) { if (!busy.get()) prompt(a, u); return }
         if (askedCode == u.code || busy.get()) return
         askedCode = u.code
+        afterLater = null
         prompt(a, u)
+    }
+
+    /**
+     * Aggiornamento obbligatorio scaduto: niente visione (canale, anteprima, film), compare il blocco. Da chiamare prima di far
+     * partire qualunque video; true = fermarsi.
+     */
+    fun blocked(a: Activity): Boolean {
+        if (!must()) return false
+        val u = pending ?: return false
+        if (!busy.get() && !a.isFinishing && a !is PlayerActivity) prompt(a, u)
+        return true
+    }
+
+    /**
+     * Prima di far partire da solo un film o un episodio (es. «Continua a guardare»): con l'aggiornamento obbligatorio scaduto
+     * compare solo il blocco e non parte niente; con una versione nuova da proporre la proposta viene prima e [go] parte dopo
+     * «Più tardi» (o chiudendola con INDIETRO). Senza aggiornamenti, o se è già stata rimandata, [go] parte subito.
+     */
+    fun before(a: Activity, go: () -> Unit) {
+        if (blocked(a)) return
+        val u = pending
+        if (u == null || a.isFinishing) { go(); return }
+        if (offerDlg?.isShowing == true) { afterLater = go; return } // proposta già a video: il contenuto aspetta la risposta
+        if (askedCode == u.code || busy.get()) { go(); return }
+        askedCode = u.code
+        afterLater = go
+        prompt(a, u)
+        if (offerDlg?.isShowing != true) { afterLater = null; go() } // la finestra non si è aperta: si va avanti
     }
 
     @Volatile private var lock: AlertDialog? = null
@@ -220,12 +290,16 @@ object Updater {
             try { d.show() } catch (_: Exception) {}
             return
         }
-        if (r != null && r.exists()) {
-            Ui.dialog(a, "Aggiornamento ${u.ver} pronto", "La versione nuova di ${a.getString(R.string.app_name)} è già scaricata e verificata: premi Installa e conferma nella schermata di Android. Ci vuole meno di un minuto.", "Installa ora", "Più tardi") {
+        // «Più tardi» (o INDIETRO): parte il contenuto che aspettava la risposta, se c'è
+        val later = { offerDlg = null; val g = afterLater; afterLater = null; g?.invoke(); Unit }
+        offerDlg = if (r != null && r.exists()) {
+            Ui.dialog(a, "Aggiornamento ${u.ver} pronto", "La versione nuova di ${a.getString(R.string.app_name)} è già scaricata e verificata: premi Installa e conferma nella schermata di Android. Ci vuole meno di un minuto.", "Installa ora", "Più tardi", later) {
+                offerDlg = null; afterLater = null
                 install(a, r)
             }
         } else {
-            Ui.dialog(a, "Nuova versione disponibile", "È pronta la versione ${u.ver} di ${a.getString(R.string.app_name)}. L'aggiornamento richiede meno di un minuto.", "Aggiorna ora", "Più tardi") {
+            Ui.dialog(a, "Nuova versione disponibile", "È pronta la versione ${u.ver} di ${a.getString(R.string.app_name)}. L'aggiornamento richiede meno di un minuto.", "Aggiorna ora", "Più tardi", later) {
+                offerDlg = null; afterLater = null
                 download(a, u.url)
             }
         }
@@ -236,7 +310,12 @@ object Updater {
         val u = pending
         val r = ready
         if (u != null && u.url == url && r != null && r.exists()) { install(a, r); return }
-        if (!busy.compareAndSet(false, true)) return
+        if (!busy.compareAndSet(false, true)) {
+            // l'APK si sta già scaricando in sottofondo: prima qui non succedeva niente, ora si installa appena è pronto
+            installWhenReady = true
+            Ui.toast("La versione nuova si sta già scaricando: l'installazione parte appena è pronta")
+            return
+        }
         val box = LinearLayout(a)
         box.orientation = LinearLayout.VERTICAL
         val pad = Ui.dp(a, 24)
@@ -254,7 +333,7 @@ object Updater {
                 val out = if (u != null && u.url == url) fileFor(u) else File(dir(), "kairos-xc-update.apk")
                 fetch(url, out, { p -> ui { bar.progress = p; txt.text = "Scaricamento… $p%" } })
                 if (u != null && u.url == url) ready = out
-                ui { try { d?.dismiss() } catch (_: Exception) {}; install(a, out) }
+                ui { try { d?.dismiss() } catch (_: Exception) {}; install(if (a.isFinishing) App.top ?: a else a, out) }
             } catch (e: Exception) {
                 ui { try { d?.dismiss() } catch (_: Exception) {}; Ui.toast("Aggiornamento non riuscito: " + (e.message ?: "errore")) }
             } finally {
@@ -264,21 +343,45 @@ object Updater {
     }
 
     private fun install(a: Activity, apk: File) {
+        installWhenReady = false
         if (Build.VERSION.SDK_INT >= 26 && !a.packageManager.canRequestPackageInstalls()) {
-            Ui.toast("Consenti a ${a.getString(R.string.app_name)} di installare app, poi riprova l'aggiornamento")
+            // senza il permesso Android non installa: lo si dice chiaramente, si apre la sua schermata e al ritorno si riparte da soli
+            afterPerm = apk
+            Ui.toast("Manca il permesso «Installa app sconosciute»: attiva «Consenti da questa fonte» per ${a.getString(R.string.app_name)} e torna indietro, l'installazione riparte da sola")
             val tries = listOf(
                 Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + a.packageName)),
                 Intent(Settings.ACTION_SECURITY_SETTINGS),
                 Intent(Settings.ACTION_SETTINGS),
             )
             for (i in tries) { try { a.startActivity(i); return } catch (_: Exception) {} }
+            afterPerm = null
             return
         }
+        afterPerm = null
         val uri: Uri = if (Build.VERSION.SDK_INT >= 24) FileProvider.getUriForFile(a, a.packageName + ".files", apk) else Uri.fromFile(apk)
-        val i = Intent(Intent.ACTION_VIEW)
-            .setDataAndType(uri, "application/vnd.android.package-archive")
-            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-        try { a.startActivity(i) } catch (_: Exception) { Ui.toast("Installazione non disponibile su questo dispositivo") }
+        val type = "application/vnd.android.package-archive"
+        val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK
+        // di solito apre l'installatore di Android; se sul dispositivo nessuno risponde, la richiesta di installazione diretta
+        @Suppress("DEPRECATION")
+        val tries = listOf(Intent(Intent.ACTION_VIEW).setDataAndType(uri, type).addFlags(flags), Intent(Intent.ACTION_INSTALL_PACKAGE).setDataAndType(uri, type).addFlags(flags))
+        for (i in tries) { try { a.startActivity(i); return } catch (_: Exception) {} }
+        // schermata già in chiusura: si parte dall'app
+        for (i in tries) { try { App.I.startActivity(i); return } catch (_: Exception) {} }
+        Ui.toast("Installazione non disponibile su questo dispositivo")
+    }
+
+    /** di ritorno dalla schermata del permesso: se ora c'è, l'installazione rimasta in attesa riparte da sola */
+    private fun resumeInstall(a: Activity): Boolean {
+        val f = afterPerm ?: return false
+        afterPerm = null
+        if (!f.exists()) return false
+        if (Build.VERSION.SDK_INT >= 26 && !a.packageManager.canRequestPackageInstalls()) {
+            Ui.toast("Senza il permesso «Installa app sconosciute» l'aggiornamento non si può installare")
+            askedCode = 0 // la proposta torna, per riprovare quando si vuole (il blocco obbligatorio resta comunque)
+            return false
+        }
+        install(a, f)
+        return true
     }
 }
 

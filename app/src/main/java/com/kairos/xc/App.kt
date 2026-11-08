@@ -25,6 +25,8 @@ class App : Application() {
         Db.init(this)
         lite = detectLite()
         max = Store.liteMode == "max"
+        // versione nuova (e APK già scaricato) dall'ultimo controllo: il blocco obbligatorio vale subito, anche senza rete
+        Updater.restore()
         // immagini (vedi Img): la Home non ne carica, quindi Glide si prepara in sottofondo dopo i primi fotogrammi
         // (se una lista arriva prima, si prepara lì al primo caricamento)
         main.postDelayed({ bg { Img.glide() } }, 1_500)

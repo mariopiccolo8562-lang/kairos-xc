@@ -98,6 +98,17 @@ object Store {
     var updFirstAt: Long
         get() = p.getLong("updFirstAt", 0)
         set(v) = p.edit().putLong("updFirstAt", v).apply()
+    /**
+     * Versione nuova trovata dall'ultimo controllo (0 = nessuna): salvata su disco perché all'apertura, anche senza rete, il
+     * blocco dell'aggiornamento obbligatorio valga subito (l'APK già scaricato si ritrova dal suo nome, vedi Updater.restore).
+     */
+    val updCode: Int get() = p.getInt("updCode", 0)
+    val updVer: String get() = s("updVer")
+    val updUrl: String get() = s("updUrl")
+    fun saveUpd(code: Int, ver: String, url: String) {
+        if (code == updCode && ver == updVer && url == updUrl) return // niente da riscrivere (il controllo gira ogni ora)
+        p.edit().putInt("updCode", code).putString("updVer", ver).putString("updUrl", url).apply()
+    }
     /** ultima richiesta «Invia aggiornamento» del pannello già gestita */
     var updSeen: Long
         get() = p.getLong("updSeen", 0)

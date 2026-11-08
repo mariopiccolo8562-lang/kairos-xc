@@ -76,8 +76,9 @@ class DetailActivity : BaseActivity() {
                 poster = r.s("img")
                 fillBasic(r)
                 loadInfo(r)
-                // da «Continua a guardare»: il film riparte subito da dove era rimasto
-                if (table == "vod" && intent.getBooleanExtra("autoplay", false)) { intent.removeExtra("autoplay"); play(false) }
+                // da «Continua a guardare»: il film riparte subito da dove era rimasto (con una versione nuova da proporre,
+                // prima la proposta e il film dopo «Più tardi»; con l'aggiornamento obbligatorio scaduto solo il blocco)
+                if (table == "vod" && intent.getBooleanExtra("autoplay", false)) { intent.removeExtra("autoplay"); Updater.before(this) { if (!isFinishing) play(false) } }
             }
         }
         playBtn.requestFocus()
@@ -225,7 +226,7 @@ class DetailActivity : BaseActivity() {
         val last = lastEpisode()
         season = last?.season ?: seasons.first()
         // da «Continua a guardare»: riparte subito l'episodio giusto, con i successivi in coda
-        if (intent.getBooleanExtra("autoplay", false)) { intent.removeExtra("autoplay"); App.main.post { if (!isFinishing) play(false) } }
+        if (intent.getBooleanExtra("autoplay", false)) { intent.removeExtra("autoplay"); App.main.post { if (!isFinishing) Updater.before(this) { if (!isFinishing) play(false) } } }
         seasonAdapter.notifyDataSetChanged()
         epAdapter.items = list.filter { it.season == season }
         epAdapter.notifyDataSetChanged()
@@ -255,6 +256,7 @@ class DetailActivity : BaseActivity() {
 
     private fun play(fromStart: Boolean) {
         val r = row ?: return
+        if (Updater.blocked(this)) return // aggiornamento obbligatorio: prima l'installazione
         if (table == "vod") {
             val url = Play.movieUrl(r) ?: run { Ui.toast("Indirizzo del film non valido"); return }
             val start = if (fromStart) 0L else Store.position(key)
@@ -269,6 +271,7 @@ class DetailActivity : BaseActivity() {
 
     private fun playEpisode(e: Ep) {
         val r = row ?: return
+        if (Updater.blocked(this)) return // aggiornamento obbligatorio: prima l'installazione
         val url = epUrl(e) ?: run { Ui.toast("Indirizzo dell'episodio non valido"); return }
         val all = episodes
         val i = all.indexOf(e)
