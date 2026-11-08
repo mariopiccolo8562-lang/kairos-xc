@@ -108,6 +108,11 @@ class State(
     val vpnMode: String, val vpnConf: String, val perms: JSONObject?,
     /** messaggio della manutenzione (status «maintenance») */
     val maintMsg: String = "",
+    /**
+     * Impronta dell'account dal pannello (profili, profili massimi, blocco delle modifiche, intestatario, connessioni):
+     * arriva con l'apertura e con ogni battito; se cambia, lo stato si rilegge. Vuota = pannello che non la manda.
+     */
+    val af: String = "",
 ) {
     val active: Boolean get() = status == "active"
     fun perm(k: String): Boolean = perms?.optBoolean(k, true) ?: true
@@ -135,6 +140,7 @@ class State(
                 vpn?.optString("mode", "off") ?: "off", vpn?.optString("conf", "") ?: "",
                 j.optJSONObject("perms"),
                 j.optString("maintMsg"),
+                j.optString("af"),
             )
         }
         fun locked() = State("locked", "", "", JSONObject(), emptyList(), emptyList(), null, "off", "", null)
@@ -362,6 +368,20 @@ object K {
         val s = Panel.state ?: return false
         val a = s.account ?: return false
         return s.perm("profiles") && a.maxProfiles > 0
+    }
+
+    /**
+     * Il profilo in uso è stato tolto dal pannello: true = si torna a «Chi guarda?» (ci sono altri profili). Se non ne resta
+     * nessuno si continua senza profilo, come all'apertura di un account senza profili.
+     */
+    fun profileGone(): Boolean {
+        if (!profilesOn()) return false
+        val id = Store.profileId
+        if (id.isEmpty()) return false
+        val a = Panel.state?.account ?: return false
+        if (a.profiles.any { it.id == id }) return false
+        if (a.profiles.isEmpty()) { Store.profileId = ""; return false }
+        return true
     }
 
     /** all'avvio si chiede «Chi guarda?» se l'account ha profili e nessuno è scelto */

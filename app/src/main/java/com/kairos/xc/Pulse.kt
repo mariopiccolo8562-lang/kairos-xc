@@ -190,6 +190,10 @@ object Pulse {
         if (nv.isNotEmpty()) { if (pv.isNotEmpty() && nv != pv) changed = true; pv = nv }
         // manutenzione accesa dal pannello: si passa subito alla schermata di attesa
         if (j.optInt("mt", 0) == 1) changed = true
+        // account cambiato dal pannello (profili creati, modificati o tolti, profili massimi, blocco…): impronta «af».
+        // Assente (pannello vecchio): come prima
+        val af = j.optString("af", "")
+        if (af.isNotEmpty() && af != s.af) changed = true
         val unseen = j.optInt("unseen", -1)
         if (unseen > K.unseenMessages().size) changed = true
         if (changed || SystemClock.elapsedRealtime() - lastReg > 20 * 60_000L) refresh()
@@ -212,5 +216,7 @@ object Pulse {
         Vpns.apply(a)
         if (App.top !is PlayerActivity) Sync.start() // mai durante la visione
         a?.stateChanged()
+        // profilo in uso tolto dal pannello: di nuovo «Chi guarda?» (durante la visione al ritorno nel menu, vedi BaseActivity)
+        a?.checkProfile()
     }
 }

@@ -116,6 +116,7 @@ abstract class BaseActivity : Activity() {
         if (needsActive) {
             val s = Panel.state ?: Panel.loadCached()
             if (s == null || !s.active) { goActivation(); return }
+            if (checkProfile()) return // profilo tolto dal pannello mentre si guardava
             Vpns.apply(this)
         }
         if (clockView != null) { App.main.removeCallbacks(clockTick); clockTick.run() }
@@ -147,6 +148,18 @@ abstract class BaseActivity : Activity() {
     fun clock(v: TextView?) {
         clockView = v
         if (v != null) v.text = Ui.hm(System.currentTimeMillis())
+    }
+
+    /**
+     * Il profilo in uso non c'è più (tolto dal pannello): si torna a «Chi guarda?». Mai nel lettore (si applica al ritorno
+     * nei menu) né nella scelta del profilo stessa. true = questa schermata è stata lasciata.
+     */
+    fun checkProfile(): Boolean {
+        if (!needsActive || this is PlayerActivity || this is ProfilesActivity || isFinishing) return false
+        if (!K.profileGone()) return false
+        startActivity(Intent(this, ProfilesActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
+        finish()
+        return true
     }
 
     fun goActivation() {
