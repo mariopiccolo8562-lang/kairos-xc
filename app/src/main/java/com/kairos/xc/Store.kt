@@ -127,14 +127,6 @@ object Store {
     var preview: String
         get() = Remote.preview ?: s("previewMode", "click") // primo OK = anteprima nel riquadro, secondo OK = schermo intero
         set(v) = put("previewMode", v)
-    /** promemoria automatici dei programmi e delle squadre seguiti (funzioni intelligenti): il cliente li spegne nelle Impostazioni */
-    var autoRem: Boolean
-        get() = p.getBoolean("autoRem", true)
-        set(v) = p.edit().putBoolean("autoRem", v).apply()
-    /** permesso del microfono già chiesto una volta (ricerca a voce): negato, non si richiede più */
-    var micAsked: Boolean
-        get() = p.getBoolean("micAsked", false)
-        set(v) = p.edit().putBoolean("micAsked", v).apply()
     var plChoice: String
         get() = s("plChoice")
         set(v) = put("plChoice", v)

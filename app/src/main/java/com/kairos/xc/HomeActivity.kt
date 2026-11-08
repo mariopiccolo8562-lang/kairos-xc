@@ -49,21 +49,6 @@ class HomeActivity : BaseActivity() {
 
         Sync.listen(syncL)
         live.requestFocus()
-        // «Per te» e «Stasera» (funzioni intelligenti): dopo il primo disegno della Home, solo se accese
-        if (Smart.on()) live.post { smartTiles() }
-    }
-
-    /** pulsanti discreti accanto ad Account e Favorite: si caricano solo con le funzioni intelligenti accese */
-    private fun smartTiles() {
-        if (isFinishing) return
-        val on = Smart.on()
-        val tiles = findViewById<View>(R.id.smartTiles) ?: if (!on) return else findViewById<android.view.ViewStub>(R.id.smartStub)?.inflate()?.also { v ->
-            v.findViewById<View>(R.id.foryou).setOnClickListener { open(SmartActivity::class.java) { putExtra("mode", "foryou") } }
-            v.findViewById<View>(R.id.tonight).setOnClickListener { open(SmartActivity::class.java) { putExtra("mode", "tonight") } }
-            Ui.zoom(v.findViewById(R.id.foryou), 1.08f)
-            Ui.zoom(v.findViewById(R.id.tonight), 1.08f)
-        } ?: return
-        tiles.visibility = if (on) View.VISIBLE else View.GONE
     }
 
     /** cerchi grandi quanto lo schermo permette (TV, chiavette e telefoni in orizzontale) */
@@ -120,7 +105,6 @@ class HomeActivity : BaseActivity() {
         super.onStateChanged()
         fill()
         newMessages()
-        smartTiles() // funzioni intelligenti accese o spente dal pannello
     }
 
     /* ---------------- intestazione ---------------- */

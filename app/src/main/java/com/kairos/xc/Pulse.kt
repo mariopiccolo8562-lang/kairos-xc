@@ -19,15 +19,12 @@ object Pulse {
     private val lateBeat = Runnable { beat(true) }
     /** «Disconnetti» da mostrare appena si apre una schermata */
     @Volatile var pendingKick = false
-    /** [ck] = canale «server|flusso» in onda (canali non funzionanti: il pannello sa che funziona di nuovo) */
-    class Watch(val state: String, val title: String, val ch: String, val chId: String, val group: String, val pl: String, val ck: String = "")
+    class Watch(val state: String, val title: String, val ch: String, val chId: String, val group: String, val pl: String)
 
     @Volatile var watching: Watch? = null
     /** statistiche della visione in corso (le fornisce il player) */
     @Volatile var stats: (() -> JSONObject?)? = null
     @Volatile private var on = false
-    /** app in primo piano (una sua schermata visibile) */
-    val inFront: Boolean get() = on
     /** ultimo battito accettato dal pannello (limite di frequenza): un battito fallito, un 429 o il «vado in sfondo» non lo toccano */
     @Volatile private var lastHb = 0L
     @Volatile private var lastSig = ""
@@ -51,7 +48,6 @@ object Pulse {
             if (!on) return
             beat(false)
             Updater.maybeCheck()
-            Smart.tick() // funzioni intelligenti: promemoria dovuti e, nei menu, un lavoro alla volta
             App.main.postDelayed(this, 20_000)
         }
     }
@@ -75,7 +71,6 @@ object Pulse {
             watching = null
             fgDue = false
             if (!left) gone()
-            Smart.background()
         }
     }
 
@@ -129,7 +124,6 @@ object Pulse {
         // thread proprio: il battito non resta in coda dietro alle letture dell'archivio né alla guida TV
         hbPool.execute {
             var r: Pair<Int, JSONObject?> = 0 to null
-            val t0 = System.currentTimeMillis()
             try { r = Panel.heartbeat(w, ack, vpnOn, screen, st2, vis = true) } catch (t: Throwable) { Log.w("KairosXC", "hb", t) } finally { busy.set(false) }
             val (c, j) = r
             // dispositivo eliminato o non più riconosciuto (401/403): si rilegge subito lo stato
@@ -141,9 +135,6 @@ object Pulse {
                     lastSig = sig
                     waitUntil = 0L
                     if (gen == fgSeq) fgDue = false
-                    // orologio del dispositivo contro quello del pannello; esito degli auto-controlli consegnato
-                    AutoCheck.clock(j.optLong("ts", 0L), t0, System.currentTimeMillis())
-                    AutoCheck.sent()
                     net { handle(j) }
                 }
                 // troppo presto per il pannello: si riprova dopo «wait» secondi (o al giro successivo)
@@ -177,9 +168,6 @@ object Pulse {
     private fun handle(j: JSONObject) {
         // controllo remoto: impostazioni imposte e comandi (un errore lì non ferma il resto: «Disconnetti», permessi, stato)
         try { Remote.onBeat(j) } catch (t: Throwable) { Log.w("KairosXC", "rc", t) }
-        // canali non funzionanti: l'elenco arriva solo quando cambia; senza, quello che c'è vale ancora
-        val dead = j.optJSONObject("dead")
-        try { if (dead != null) Dead.offer(dead) else Dead.confirm() } catch (t: Throwable) { Log.w("KairosXC", "dead", t) }
         val sat = j.optJSONArray("sat")
         if (sat != null) for (i in 0 until sat.length()) Portals.markBad(sat.optString(i), 30 * 60_000L)
         val kick = j.optLong("kick", 0)

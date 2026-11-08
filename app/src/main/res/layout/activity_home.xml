@@ -163,13 +163,6 @@
                 <ImageView style="@style/HomeTileIcon" android:src="@drawable/hi_star" />
                 <TextView style="@style/HomeTileLabel" android:text="FAVORITE" />
             </LinearLayout>
-            <!-- PER TE · STASERA: solo con le funzioni intelligenti, caricati dopo il primo disegno (vedi home_smart.xml) -->
-            <ViewStub
-                android:id="@+id/smartStub"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:inflatedId="@+id/smartTiles"
-                android:layout="@layout/home_smart" />
         </LinearLayout>
         <LinearLayout
             android:layout_width="wrap_content"

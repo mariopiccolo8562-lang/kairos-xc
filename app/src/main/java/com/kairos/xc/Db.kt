@@ -2,7 +2,6 @@ package com.kairos.xc
 
 import android.content.Context
 import android.database.Cursor
-import android.database.MergeCursor
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 
@@ -190,24 +189,9 @@ object Db {
             FAV -> favIn(q, favs)
             else -> { q.where += " AND cat = ?"; q.args.add(cat) }
         }
-        // canali che non funzionano per nessuno (pannello, nel battito): in fondo, con due letture nello stesso ordine
-        // dell'indice (niente riordino, niente righe in memoria); senza canali segnalati la lettura è quella di sempre
-        val dead = try { Dead.where(pls) } catch (_: Exception) { null }
-        if (dead != null) {
-            val sel = "SELECT $LIVE_COLS FROM live WHERE ${q.where} AND "
-            val args = q.args.toTypedArray()
-            val c = SplitCursor(r.rawQuery(sel + "NOT IFNULL(($dead), 0) ORDER BY num, _id", args), r.rawQuery(sel + "IFNULL(($dead), 0) ORDER BY num, _id", args))
-            c.count
-            return c
-        }
         val c = r.rawQuery("SELECT $LIVE_COLS FROM live WHERE ${q.where} ORDER BY num, _id", q.args.toTypedArray())
         c.count // riempie la prima finestra qui, fuori dal thread dell'interfaccia
         return c
-    }
-
-    /** canali che funzionano, poi quelli segnalati come non funzionanti: dalla posizione [split] in poi sono «non disponibile» */
-    class SplitCursor(a: Cursor, b: Cursor) : MergeCursor(arrayOf(a, b)) {
-        val split: Int = a.count
     }
 
     fun liveIds(cat: String, pls: List<String>, kids: Boolean, favs: Set<String>): LongArray {
@@ -316,35 +300,6 @@ object Db {
         val out = ArrayList<Ep>()
         r.rawQuery("SELECT season, num, title, url FROM ep WHERE series = ? ORDER BY season, num, _id", arrayOf(seriesRow.toString())).use { c ->
             while (c.moveToNext()) out.add(Ep(c.getInt(0), c.getInt(1), c.getString(2) ?: "", c.getString(3) ?: ""))
-        }
-        return out
-    }
-
-    /* ---------------- funzioni intelligenti: poche righe, sempre con LIMIT ---------------- */
-    /** categorie (id, nome) di [kind] del portale: i nomi servono a riconoscere generi, bambini e sport */
-    fun catList(kind: String, pls: List<String>): List<Pair<String, String>> {
-        if (pls.isEmpty()) return emptyList()
-        val q = base(pls, false)
-        val out = ArrayList<Pair<String, String>>()
-        r.rawQuery("SELECT id, name FROM cat WHERE kind = ? AND ${q.where} LIMIT 800", arrayOf(kind) + q.args.toTypedArray()).use { c ->
-            while (c.moveToNext()) out.add((c.getString(0) ?: "") to (c.getString(1) ?: ""))
-        }
-        return out
-    }
-
-    class Item(val table: String, val id: Long, val k: String, val name: String, val img: String, val year: String, val rating: String, val cat: String, val adult: Boolean, val num: Long, val pl: String, val sid: String)
-
-    /**
-     * Righe di [table] del portale con il filtro [where] ([args]), in [order], al massimo [limit]. [byKey] come nella ricerca per
-     * nome: lettura in fila (filtri sul nome); false = indici sul portale (categoria, data di aggiunta)
-     */
-    fun items(table: String, pls: List<String>, kids: Boolean, where: String?, args: List<String>, order: String, limit: Int, byKey: Boolean = true): List<Item> {
-        if (pls.isEmpty() || limit <= 0) return emptyList()
-        val q = base(pls, kids, byKey)
-        val cols = if (table == "live") "_id, k, name, logo, '', '', cat, adult, num, pl, sid" else "_id, k, name, img, year, rating, cat, adult, 0, pl, sid"
-        val out = ArrayList<Item>()
-        r.rawQuery("SELECT $cols FROM $table WHERE ${q.where}" + (if (where != null) " AND ($where)" else "") + " ORDER BY $order LIMIT $limit", (q.args + args).toTypedArray()).use { c ->
-            while (c.moveToNext()) out.add(Item(table, c.getLong(0), c.getString(1) ?: "", c.getString(2) ?: "", c.getString(3) ?: "", c.getString(4) ?: "", c.getString(5) ?: "", c.getString(6) ?: "", c.getInt(7) == 1, c.getLong(8), c.getString(9) ?: "", c.getString(10) ?: ""))
         }
         return out
     }

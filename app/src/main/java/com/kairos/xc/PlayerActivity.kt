@@ -43,33 +43,14 @@ object Play {
     }
 
     fun vod(a: Activity, kind: String, id: String, title: String, sub: String, url: String, pos: Long, recent: JSONObject, queue: JSONArray?) {
+        val target = if (Remote.engine(kind) == "vlc") VlcActivity::class.java else PlayerActivity::class.java
         val playlist = K.pl(recent.optString("pl"))
         val resolvedUrl = playlist?.fix(url) ?: url
-        // il lettore scelto dal cliente o dal pannello; con «Automatico» e le funzioni intelligenti, quello imparato per il formato
-        val vlc = Engines.pick(kind, resolvedUrl, title) == "vlc"
-        val i = Intent(a, if (vlc) VlcActivity::class.java else PlayerActivity::class.java)
+        val i = Intent(a, target)
             .putExtra("kind", kind).putExtra("id", id).putExtra("title", title).putExtra("sub", sub)
             .putExtra("url", resolvedUrl).putExtra("pos", pos).putExtra("recent", recent.toString())
         if (queue != null && queue.length() > 0) i.putExtra("queue", queue.toString())
-        if (vlc && Engines.learnedVlc(kind, resolvedUrl, title)) i.putExtra("learned", EngineBook.key(resolvedUrl, title))
         a.startActivity(i)
-    }
-
-    /** lettore di un canale ([r] = la sua riga, se già letta): come per film e serie */
-    fun liveIntent(a: Activity, r: Db.Row?, id: Long, cat: String): Intent {
-        val url = r?.let { liveUrls(it).firstOrNull() } ?: ""
-        val name = r?.s("name") ?: ""
-        val vlc = Engines.pick("live", url, name) == "vlc"
-        val i = Intent(a, if (vlc) VlcActivity::class.java else PlayerActivity::class.java).putExtra("kind", "live").putExtra("cat", cat).putExtra("rowId", id)
-        if (vlc && Engines.learnedVlc("live", url, name)) i.putExtra("learned", EngineBook.key(url, name))
-        return i
-    }
-
-    /** apre un canale già letto dall'archivio (promemoria, «Per te», assistente) */
-    fun openLive(a: Activity, r: Db.Row, cat: String) {
-        if (Updater.blocked(a)) return // aggiornamento obbligatorio: prima l'installazione
-        Store.setLastLive(r.l("_id"), r.s("k"))
-        a.startActivity(liveIntent(a, r, r.l("_id"), cat))
     }
 
     /** da «Continua a guardare» */
@@ -111,8 +92,7 @@ class PlayerActivity : BaseActivity() {
         private const val VLC_REQ = 781
         /** fotogrammi al secondo «standard»: una misura che dista meno di 1,5 si arrotonda a questi */
         private val FPS_STD = intArrayOf(24, 25, 30, 48, 50, 60, 100, 120)
-        /** contenuti già passati a VLC in questa apertura (o tornati da un VLC imparato che non partiva): non ci si ripassa */
-        val vlcFallbacks: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+        private val vlcFallbacks = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     }
 
     private lateinit var pv: PlayerView
@@ -237,17 +217,6 @@ class PlayerActivity : BaseActivity() {
     private var bwMs = 0L
     private var bwBytes = 0L
 
-    // funzioni intelligenti: lettore imparato (un minuto di visione senza problemi = riuscita), abitudini, zapping
-    private var engOkDone = false
-    /** inizio della visione del canale o del titolo in corso (orologio monotono): 3 minuti di fila = un'abitudine */
-    private var habAt = 0L
-    private var habDone = false
-    private var zapDir = 0
-    private var zapDirAt = 0L
-    /** canale di prima: sequenze dello zapping */
-    private var prevK = ""
-    private val warmR = Runnable { warmNext() }
-
     // diagnostica per il pannello
     private var decoderName = ""
     private var dropped = 0L
@@ -336,7 +305,6 @@ class PlayerActivity : BaseActivity() {
             checkFill()
             if (live) measureFps()
             if (!live) { savePos(false); goodPos() }
-            checkSmart()
             App.main.postDelayed(this, 1000)
         }
     }
@@ -433,7 +401,6 @@ class PlayerActivity : BaseActivity() {
         App.main.removeCallbacks(giveUpR)
         App.main.removeCallbacks(cushionR)
         App.main.removeCallbacks(tuneR)
-        App.main.removeCallbacks(warmR)
         drainSamples.clear()
         if (!live) {
             savePos(true)
@@ -462,7 +429,6 @@ class PlayerActivity : BaseActivity() {
         App.main.removeCallbacks(spinR)
         App.main.removeCallbacks(noticeR)
         App.main.removeCallbacks(resR)
-        App.main.removeCallbacks(warmR)
         sendEvents()
     }
 
@@ -889,8 +855,6 @@ class PlayerActivity : BaseActivity() {
             .putExtra("sub", vodSub).putExtra("url", fallbackUrl)
             .putExtra("pos", maxOf(player?.currentPosition ?: 0L, lastGoodPos))
             .putExtra("recent", recent?.toString().orEmpty()).putExtra("queue", queue.toString())
-        // lettore imparato: se con VLC il contenuto va, per questo formato ExoPlayer ha fallito e VLC è riuscito
-        if (Smart.on()) i.putExtra("engLeft", "exo").putExtra("engKey", engKey())
         event(problem, "passato a VLC", "risolto", problemErr)
         problem = ""
         sendEvents()
@@ -1179,78 +1143,8 @@ class PlayerActivity : BaseActivity() {
             .put("line", Line.line()).put("dev", Line.device()).put("fmt", fmt).put("stallMs", stallMs)
         if (action == "server di riserva" && lastSrv.isNotEmpty()) o.put("srv", lastSrv)
         if (Line.bw > 0) o.put("bw", Math.round(Line.bw / 100_000.0) / 10.0)
-        if (live) {
-            o.put("var", variantLabel())
-            // canali non funzionanti (come la Kairos Pro): il canale come lo conosce il pannello, «server|flusso»
-            curCk().takeIf { it.isNotEmpty() }?.let { o.put("ck", it) }
-        }
+        if (live) o.put("var", variantLabel())
         events.put(o)
-    }
-
-    /* ---------------- funzioni intelligenti (solo conti in memoria durante la visione) ---------------- */
-    /** canale in onda come lo conosce il pannello («server|flusso»): versione che va davvero, server attuale */
-    private fun curCk(): String {
-        val r = row ?: return ""
-        return Ck.of(urls.getOrNull(urlIdx) ?: urls.firstOrNull() ?: "", r.s("sid"))
-    }
-
-    private fun codecTag(): String = if (player?.videoFormat?.sampleMimeType == "video/hevc") "HEVC" else ""
-
-    /** formato per il lettore imparato: l'indirizzo con cui si apre il contenuto (anche VLC parte da lì) */
-    private fun engKey(): String {
-        if (!live) return EngineBook.key(vodUrl, vodTitle, codecTag())
-        val b = baseRow ?: row ?: return ""
-        return EngineBook.key(Play.liveUrls(b).firstOrNull() ?: "", b.s("name"), codecTag())
-    }
-
-    /** canale nuovo (non una sua versione): sequenza dello zapping, abitudine e riuscita da contare da capo, DNS del successivo */
-    private fun smartTune(k: String) {
-        engOkDone = false
-        habAt = mono()
-        habDone = false
-        if (!Smart.on()) return
-        if (prevK.isNotEmpty() && prevK != k) Zap.learn(prevK, k)
-        prevK = k
-        App.main.removeCallbacks(warmR)
-        App.main.postDelayed(warmR, 1_500)
-    }
-
-    /** una volta al secondo, solo conti: riuscita del lettore («Automatico») e abitudini (3 minuti di fila, 5 per film e serie) */
-    private fun checkSmart() {
-        if (!Smart.on()) return
-        val p = player ?: return
-        val now = mono()
-        if (!engOkDone && firstReady && problem.isEmpty() && p.isPlaying && playStartAt > 0 && now - playStartAt > 60_000 && now - lastStallAt > 30_000
-            && Remote.engine(if (live) "live" else kind) == "auto") {
-            engOkDone = true
-            Engines.ok("exo", engKey())
-        }
-        if (!habDone && habAt > 0 && p.isPlaying && now - habAt >= (if (live) 180_000L else 300_000L)) {
-            habDone = true
-            val t = System.currentTimeMillis()
-            if (live) {
-                val b = baseRow ?: row ?: return
-                val prog = progs.firstOrNull { it.start <= t && it.end > t }?.title ?: ""
-                HabitStore.note(HabitStore.Note(Store.profileId, 'l', b.s("k"), b.s("name"), b.s("cat"), prog, t))
-            } else {
-                val series = kind == "series"
-                val k = if (series) recent?.optString("group").orEmpty() else vodId
-                if (k.isNotEmpty()) HabitStore.note(HabitStore.Note(Store.profileId, if (series) 's' else 'm', k, vodTitle, "", "", t))
-            }
-        }
-    }
-
-    /** DNS del canale più probabile: verso dello zapping in corso o sequenza imparata (una lettura dall'archivio, una risoluzione) */
-    private fun warmNext() {
-        if (!Smart.on() || !live || ids.size < 2 || isFinishing) return
-        val dir = if (zapDir != 0 && mono() - zapDirAt < 30_000L) zapDir else 0
-        val nextId = if (dir != 0) ids[(idx + dir).mod(ids.size)] else 0L
-        val learned = if (dir == 0) (baseRow ?: row)?.s("k")?.let { Zap.predict(it) } else null
-        if (nextId == 0L && learned == null) return
-        bg {
-            val r = if (nextId > 0) Db.one("live", nextId) else Db.oneByK("live", learned ?: return@bg)
-            r?.let { Play.liveUrls(it).firstOrNull() }?.let { Zap.warm(it) }
-        }
     }
 
     /* ---------------- diretta ---------------- */
@@ -1296,8 +1190,6 @@ class PlayerActivity : BaseActivity() {
         val capped = !variant && App.max
         val cls = Line.cls()
         val keepVariants = variants
-        // «Massima» (o una qualità scelta) resta quella: la versione secondo i decoder del dispositivo solo con «Automatica»
-        val autoQ = Remote.player("p.quality", "auto") == "auto"
         bg {
             val r0 = Db.one("live", id) ?: run {
                 // le liste sono state aggiornate e questo numero non esiste più: si rilegge l'elenco dei canali
@@ -1308,7 +1200,6 @@ class PlayerActivity : BaseActivity() {
             var r = r0
             var startReduced = false
             var startCapped = false
-            var startDevice = false
             if (!variant) {
                 val q0 = r0.l("q").toInt()
                 val hv = r0.l("hevc") == 1L
@@ -1325,13 +1216,6 @@ class PlayerActivity : BaseActivity() {
                 if (!startReduced && capped && q0 >= 3) {
                     vars.firstOrNull { it.q == 2 && !it.hevc }?.let { v -> Db.one("live", v.id)?.let { r = it; startCapped = true } }
                 }
-                // decoder del dispositivo (letti una volta): 4K su schermo o decoder che non lo reggono → FHD, HEVC senza decoder → H.264
-                if (autoQ) {
-                    val cur = r
-                    VerPick.pick(DevCaps.caps, VerPick.V(cur.l("_id"), cur.s("name"), cur.l("q").toInt(), cur.l("hevc") == 1L),
-                        listOf(VerPick.V(r0.l("_id"), r0.s("name"), q0, hv)) + vars.map { VerPick.V(it.id, it.name, it.q, it.hevc) })
-                        ?.let { v -> Db.one("live", v.id)?.let { r = it; startDevice = true } }
-                }
             }
             val list = Play.liveUrls(r)
             Vpns.awaitForced()
@@ -1341,11 +1225,10 @@ class PlayerActivity : BaseActivity() {
                 if (!variant) {
                     baseRow = r0
                     variants = vars
-                    reduced = startReduced || startCapped || startDevice
+                    reduced = startReduced || startCapped
                     reducedByLine = startReduced
                     reducedAt = if (reduced) mono() else 0L
-                    // scelta dell'utente o limite del dispositivo: non si torna da soli alla versione piena
-                    stayReduced = startCapped || startDevice
+                    stayReduced = startCapped // scelta dell'utente: non si torna da soli alla versione piena
                     tryingFull = false
                     stalls.clear()
                     progs = emptyList()
@@ -1369,9 +1252,8 @@ class PlayerActivity : BaseActivity() {
                 ensureClass() // classe effettiva ricalcolata a ogni avvio: se è cambiata il lettore si ricrea
                 startUrl()
                 if (!variant) {
-                    Pulse.watch(Pulse.Watch("live", "", r0.s("name"), r0.s("k"), "", r0.s("pl"), curCk()))
+                    Pulse.watch(Pulse.Watch("live", "", r0.s("name"), r0.s("k"), "", r0.s("pl")))
                     loadEpg(r0, my)
-                    smartTune(r0.s("k"))
                 }
             }
         }
@@ -1424,15 +1306,13 @@ class PlayerActivity : BaseActivity() {
                 subV.text = now?.title ?: ""
                 info.text = list.getOrNull(1)?.let { "Dopo · " + Ui.hm(it.start) + "  " + it.title } ?: ""
                 updateTime()
-                if (now != null) Pulse.watch(Pulse.Watch("live", now.title, r.s("name"), r.s("k"), "", r.s("pl"), curCk()))
+                if (now != null) Pulse.watch(Pulse.Watch("live", now.title, r.s("name"), r.s("k"), "", r.s("pl")))
             }
         }
     }
 
     private fun zapBy(d: Int) {
         if (ids.isEmpty()) return
-        zapDir = d
-        zapDirAt = mono()
         idx = (idx + d).mod(ids.size)
         val id = ids[idx]
         bg {
@@ -1499,9 +1379,6 @@ class PlayerActivity : BaseActivity() {
                 reconnects = 0
                 cushionExtra = 0
                 forceHls = false
-                engOkDone = false
-                habAt = mono()
-                habDone = false
                 lastGoodPos = startPos.coerceAtLeast(0)
                 stalls.clear()
                 ensureClass()

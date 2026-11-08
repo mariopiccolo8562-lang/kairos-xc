@@ -60,8 +60,6 @@ object Remote {
     val bgUpdate: Boolean? get() = str("bgupd")?.let { if (it == "on") true else if (it == "off") false else null }
     /** aggiornamento obbligatorio deciso dal pannello: giorni di grazia dal primo avviso, null = il cliente può rimandare */
     val forceDays: Int? get() = when (str("force")) { "now" -> 0; "3d" -> 3; "7d" -> 7; else -> null }
-    /** «Funzioni intelligenti» (on | off) dal pannello: profilo Kairos XC o singolo cliente; assenti = spente */
-    val smart: String? get() = str("smart")?.takeIf { it == "on" || it == "off" }
     /** finestra «Privacy e condizioni»: skip = il fornitore ha deciso di non mostrarla */
     val privacy: String? get() = str("privacy")?.takeIf { it == "show" || it == "skip" }
     fun imposed(k: String): Boolean = str(k) != null
@@ -109,7 +107,6 @@ object Remote {
             val wasMax = App.max
             App.lite = App.I.detectLite()
             App.max = Store.liteMode == "max"
-            Smart.stateChanged()
             if (Store.liteMode != liteBefore && (App.lite != wasLite || App.max != wasMax) && !App.isPlayer(App.top)) restart()
             else (App.top as? BaseActivity)?.stateChanged()
         }
@@ -134,7 +131,6 @@ object Remote {
         .put("p.quality", player("p.quality", "auto"))
         .put("p.buffer", player("p.buffer", "balanced"))
         .put("inst", if (canInstall()) "on" else "off")
-        .put("smart", if (Smart.on()) "on" else "off")
 
     /* ---------------- comandi ---------------- */
 
