@@ -124,12 +124,13 @@ class DetailActivity : BaseActivity() {
     }
 
     private fun setBackdrop(url: String) {
-        if (url.isEmpty() || url == backdrop || App.max) return // «Leggerissima»: basta la locandina
+        if (url.isEmpty() || url == backdrop) return
         backdrop = url
         if (imagesReleased) return // scheda sotto il lettore (partito da «Continua a guardare»): lo sfondo arriva al ritorno
         val iv = findViewById<ImageView>(R.id.backdrop)
-        // mai più largo dello schermo (e al massimo 1280 pixel)
-        val w = minOf(if (App.lite) 640 else 1280, resources.displayMetrics.widthPixels.takeIf { it > 0 } ?: 1280)
+        // l'anteprima c'è in ogni modalità: le modalità leggere la decodificano solo più piccola (a 16 bit, vedi Img),
+        // mai più larga dello schermo e al massimo 1280 pixel
+        val w = minOf(if (App.max) 480 else if (App.lite) 640 else 1280, resources.displayMetrics.widthPixels.takeIf { it > 0 } ?: 1280)
         Ui.img(iv, url, w, w * 9 / 16, Img.BACKDROP)
     }
 
