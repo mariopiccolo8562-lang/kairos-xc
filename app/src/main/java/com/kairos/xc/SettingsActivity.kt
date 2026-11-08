@@ -76,7 +76,10 @@ class SettingsActivity : BaseActivity() {
         }
         if (K.canSwitchPl()) {
             val cur = K.active().firstOrNull()
-            row(R.drawable.ic_layers, "Portale", "Scegli il server da usare", cur?.name ?: "") { choosePl() }
+            val serverName = cur?.takeIf { it.alts.isNotEmpty() }?.let { Portals.name(it, Portals.host(it)) }.orEmpty()
+            val modeName = when (cur?.mode) { "main" -> "sempre il principale"; "alt" -> "sempre la riserva"; else -> "automatico" }
+            val subtitle = if (serverName.isNotEmpty()) "${cur?.name} · $serverName ($modeName)" else cur?.name.orEmpty()
+            row(R.drawable.ic_layers, "Portale", "Scegli il server da usare", subtitle) { choosePl() }
         }
         if (s.vpnMode != "off" && s.vpnConf.isNotEmpty()) {
             if (s.vpnMode == "force") row(R.drawable.ic_shield, "VPN", KxVpn.message.ifEmpty { "Attivata dal tuo fornitore" }, "Sempre attiva") {
