@@ -52,6 +52,14 @@ object Store {
 
     private fun s(k: String, d: String = ""): String = p.getString(k, d) ?: d
     private fun put(k: String, v: String) = p.edit().putString(k, v).apply()
+    private fun portalKey(origin: String) = origin.trim().replace(Regex("^https?://", RegexOption.IGNORE_CASE), "").trimEnd('/').lowercase()
+
+    fun portalChoice(id: String): String = s("ptl_$id")
+    fun setPortalChoice(id: String, origin: String) = put("ptl_$id", origin)
+    fun portalProbeAt(id: String): Long = s("ptlt_$id").toLongOrNull() ?: 0L
+    fun setPortalProbeAt(id: String, at: Long) = put("ptlt_$id", at.toString())
+    fun portalBadUntil(origin: String): Long = s("ptlbad_${portalKey(origin)}").toLongOrNull() ?: 0L
+    fun setPortalBadUntil(origin: String, until: Long) = put("ptlbad_${portalKey(origin)}", until.toString())
 
     /** indirizzo del pannello: quello della build, oppure quello nuovo indicato dal pannello stesso */
     var server: String

@@ -104,6 +104,8 @@ object Sync {
         val errors = ArrayList<String>()
         try {
             Vpns.awaitForced() // VPN «sempre attiva»: le liste passano dalla VPN
+            val active = K.active()
+            if (App.top !is PlayerActivity && active.map { it.id } == pls.map { it.id }) Portals.probe(active)
             val db = Db.w
             // sul disco restano il portale in uso e quello usato prima (per tornarci al volo); gli altri si tolgono
             val assigned = K.playlists().map { it.id }

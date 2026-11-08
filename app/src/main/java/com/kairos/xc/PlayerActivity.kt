@@ -145,6 +145,7 @@ class PlayerActivity : BaseActivity() {
     private var problemErr = ""
     private var step = 0
     private var lastAction = ""
+    private var lastSrv = ""
     private var fixAt = 0L
     private var firstReady = false
     private val stalls = ArrayList<Long>()
@@ -179,6 +180,8 @@ class PlayerActivity : BaseActivity() {
     private var cushionUntil = 0L
     /** gradini in più decisi dalla scala dei rimedi (+2 s ciascuno, fino a +6 s) */
     private var cushionExtra = 0
+    private val drainSamples = ArrayList<Pair<Long, Long>>()
+    private var drainUntil = 0L
 
     // qualità adattiva: versioni dello stesso canale (4K / FHD / HD / SD)
     private var baseRow: Db.Row? = null
@@ -286,6 +289,7 @@ class PlayerActivity : BaseActivity() {
             checkFreeze()
             checkResolved()
             checkReduced()
+            checkDrain()
             checkFill()
             if (live) measureFps()
             if (!live) { savePos(false); goodPos() }
@@ -662,6 +666,27 @@ class PlayerActivity : BaseActivity() {
         }
     }
 
+    private fun checkDrain() {
+        val p = player ?: return
+        val now = mono()
+        if (!live || !firstReady || p.playbackState != Player.STATE_READY || !p.isPlaying || problem.isNotEmpty() ||
+            cushioning || blocked || (tryingFull && now - tryFullAt < 30_000L)) {
+            drainSamples.clear()
+            return
+        }
+        if (now < drainUntil) { drainSamples.clear(); return }
+        drainSamples.add(now to p.totalBufferedDuration)
+        drainSamples.removeAll { now - it.first > 20_000L }
+        val old = drainSamples.lastOrNull { now - it.first >= 10_000L } ?: return
+        val threshold = Players.buf(true, playerCls).rebuffer + 2_000L
+        if (p.totalBufferedDuration >= threshold || old.second - p.totalBufferedDuration < 3_000L) return
+        val r = row ?: return
+        if (lighterThan(r) == null || !switchLighter(byLine = true)) return
+        drainSamples.clear()
+        drainUntil = now + 60_000L
+        event("stall", "qualità ridotta in anticipo", "risolto", "buffer in calo")
+    }
+
     /** fill-ratio dei primi 10 s: secondi di video che arrivano per ogni secondo reale (sul TS: > 1 la linea regge il canale) */
     private fun checkFill() {
         val p = player ?: return
@@ -722,7 +747,7 @@ class PlayerActivity : BaseActivity() {
         val now = mono()
         val fresh = problem.isEmpty()
         if (fresh) {
-            problem = kind; problemErr = err; lastAction = ""
+            problem = kind; problemErr = err; lastAction = ""; lastSrv = ""
             longStall = long
             step = if (kind == lastKind && now - resolvedAt < 180_000) lastStep else 0
             decoderProblem = decoderError
@@ -741,11 +766,11 @@ class PlayerActivity : BaseActivity() {
         if (fresh && kind == "stall" && reduced && reducedByLine && switchLighter(byLine = true)) { lastAction = "versione più leggera"; fixAt = now; return }
         val ladder = if (live) when (problem) {
             "freeze" -> listOf("reload", "soft", "alt", "lighter")
-            "stall" -> if (longStall) listOf("reload", "alt", "lighter") else listOf("lighter", "alt", "cushion")
-            else -> listOf("reload", "alt", "soft", "lighter")
+            "stall" -> listOf("reload", "server", "alt", "lighter")
+            else -> listOf("reload", "server", "alt", "soft", "lighter")
         } else when (problem) {
-            "stall" -> if (longStall) listOf("reload", "reload") else listOf("cushion", "cushion")
-            else -> listOf("reload", "soft")
+            "stall" -> listOf("reload", "server", "reload")
+            else -> listOf("reload", "server", "soft")
         }
         // stesso problema tornato dopo l'ultima soluzione possibile: si ricomincia (una volta) dal primo passo
         if (fresh && step >= ladder.size) step = 0
@@ -797,6 +822,30 @@ class PlayerActivity : BaseActivity() {
             urlIdx = (urlIdx + 1) % urls.size
             startUrl()
             true
+        }
+        "server" -> {
+            val r = row
+            val p = r?.let { K.pl(it.s("pl")) }
+            val net = Net.type()
+            if (r == null || p == null || p.mode != "auto" || Portals.cands(p).size < 2 || decoderProblem || net == "none" || (net == "wifi" && Net.rssi() in -120..-76)) false
+            else {
+                val oldOrigin = p.origin()
+                val switched = if (oldOrigin.isNotEmpty() && (live || vodUrl.startsWith(oldOrigin))) Portals.next(p) else null
+                if (switched == null) false
+                else {
+                    if (live) {
+                        urls = Play.liveUrls(r)
+                        urlIdx = urlIdx.coerceIn(0, (urls.size - 1).coerceAtLeast(0))
+                    } else {
+                        vodUrl = switched.second + vodUrl.substring(switched.first.length)
+                    }
+                    lastSrv = switched.first
+                    lastAction = "server di riserva"
+                    notice("Passo a un altro server…")
+                    startUrl(if (live) null else player?.currentPosition)
+                    true
+                }
+            }
         }
         "lighter" -> if (switchLighter(byLine = problem == "stall")) { lastAction = "versione più leggera"; true } else capHls()
         // cuscinetto un gradino più largo per il resto del canale (+2 s per gradino, fino a +6 s)
@@ -1024,6 +1073,7 @@ class PlayerActivity : BaseActivity() {
         val o = JSONObject().put("t", System.currentTimeMillis()).put("problem", problem).put("action", action).put("outcome", outcome)
             .put("err", err).put("title", title).put("id", if (live) base?.s("k") ?: "" else vodId).put("k", if (live) "live" else kind).put("engine", "exo")
             .put("line", Line.line()).put("dev", Line.device()).put("fmt", fmt).put("stallMs", stallMs)
+        if (action == "server di riserva" && lastSrv.isNotEmpty()) o.put("srv", lastSrv)
         if (Line.bw > 0) o.put("bw", Math.round(Line.bw / 100_000.0) / 10.0)
         if (live) o.put("var", variantLabel())
         events.put(o)
