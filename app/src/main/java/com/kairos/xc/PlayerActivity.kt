@@ -794,7 +794,7 @@ class PlayerActivity : BaseActivity() {
         // canale partito già ridotto per la connessione e che si blocca ancora: dritto alla versione ancora più leggera
         if (fresh && kind == "stall" && reduced && reducedByLine && switchLighter(byLine = true)) { lastAction = "versione più leggera"; fixAt = now; return }
         val ladder = if (live) when (problem) {
-            "freeze" -> if (Adaptive.device() == "D" || problemErr == "immagine a scatti") listOf("reload", "lighter", "alt", "soft") else listOf("reload", "soft", "alt", "lighter")
+            "freeze" -> if (Line.device() == "D" || problemErr == "immagine a scatti") listOf("reload", "lighter", "alt", "soft") else listOf("reload", "soft", "alt", "lighter")
             "stall" -> if (longStall) listOf("reload", "server", "alt", "lighter") else listOf("lighter", "alt", "cushion")
             else -> listOf("reload", "server", "alt", "soft", "lighter")
         } else when (problem) {
@@ -840,7 +840,7 @@ class PlayerActivity : BaseActivity() {
         }
         // decodifica software solo per immagine ferma o errori del decoder, mai per problemi di rete
         // sulle chiavette da 1 GB la CPU non decodifica in software oltre la SD: l'immagine resterebbe quasi ferma con l'audio
-        "soft" -> if (soft || (problem == "error" && !decoderProblem) || (Adaptive.device() == "D" && (player?.videoFormat?.height ?: 0).let { it == 0 || it > 576 })) false else {
+        "soft" -> if (soft || (problem == "error" && !decoderProblem) || (Line.device() == "D" && (player?.videoFormat?.height ?: 0).let { it == 0 || it > 576 })) false else {
             lastAction = "decodifica software"
             notice("Provo la decodifica software…")
             setSoft(true, if (live) null else player?.currentPosition, restart = true)
