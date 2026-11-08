@@ -142,6 +142,10 @@ object Store {
     fun saveLine(cls: String, at: Long, bw: Long) {
         p.edit().putString("lineCls", cls).putLong("lineAt", at).putLong("bw", bw).apply()
     }
+    /** versione «a scatti» imparata sul dispositivo (QualityPolicy.Heavy, vedi Line.heavy) */
+    var heavy: String
+        get() = s("heavyQ")
+        set(v) = put("heavyQ", v)
     /** portale usato prima di quello attuale: le sue liste restano sul disco, per tornarci al volo */
     var plPrev: String
         get() = s("plPrev")

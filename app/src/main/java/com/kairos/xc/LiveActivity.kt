@@ -356,8 +356,12 @@ class LiveActivity : BaseActivity() {
         pspin.visibility = View.VISIBLE
         hint(key() + " · schermo intero")
         net {
-            // sempre la versione più leggera dello stesso canale, se la playlist ne ha (niente HEVC: pesa di più da decodificare)
-            val light = try { Db.variants(r).filter { !it.hevc && it.q < Quality.rank(r.s("name")) }.minByOrNull { it.q } } catch (_: Exception) { null }
+            // canali FHD e 4K: la versione HD dello stesso canale se la playlist ne ha (niente HEVC: pesa di più da decodificare),
+            // altrimenti la più leggera; i canali HD e SD restano come sono
+            val light = try {
+                val vs = Db.variants(r)
+                QualityPolicy.previewQ(Quality.rank(r.s("name")), vs.map { it.q to it.hevc })?.let { q -> vs.firstOrNull { it.q == q && !it.hevc } }
+            } catch (_: Exception) { null }
             val url = light?.let { Db.one("live", it.id) }?.let { Play.liveUrls(it).firstOrNull() } ?: full
             Vpns.awaitForced() // VPN «sempre attiva»: anche l'anteprima passa dalla VPN
             if (my != videoSeq) return@net // nel frattempo si è passati a un altro canale

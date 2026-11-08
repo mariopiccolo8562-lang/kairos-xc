@@ -211,6 +211,10 @@ class PlayerActivity : BaseActivity() {
 
     // Kairos Adaptive: classe effettiva con cui è stato costruito il lettore (se cambia al prossimo avvio si ricrea)
     private var playerCls = Line.NORMAL
+    /** classe della linea con cui è stato costruito il lettore (qualità e ABR, Line.net) */
+    private var playerNet = Line.NORMAL
+    /** versione «piena» per questo dispositivo del canale scelto (tetti di schermo, dispositivo e Qualità video): la risalita torna qui */
+    private var fullId = 0L
     /** formato in uso: hls / ts / vod */
     private var fmt = ""
     /** trasferito dal misuratore con l'indirizzo in corso: i campioni valgono dopo 512 KB e 2 s */
@@ -443,8 +447,9 @@ class PlayerActivity : BaseActivity() {
 
     private fun newPlayer() {
         playerCls = Line.cls()
+        playerNet = Line.net()
         hlsCap = 0
-        val p = Players.build(this, live, soft, cls = playerCls)
+        val p = Players.build(this, live, soft, cls = playerCls, net = playerNet)
         player = p
         pv.player = p
         p.addListener(listener)
@@ -459,9 +464,9 @@ class PlayerActivity : BaseActivity() {
         try { p.removeListener(listener); p.removeAnalyticsListener(analytics); p.release() } catch (_: Exception) {}
     }
 
-    /** la classe effettiva si ricalcola a ogni avvio: se è cambiata da quando il lettore è stato costruito, lo si ricrea */
+    /** le classi si ricalcolano a ogni avvio: se sono cambiate da quando il lettore è stato costruito, lo si ricrea */
     private fun ensureClass() {
-        if (player == null || Line.cls() == playerCls) return
+        if (player == null || (Line.cls() == playerCls && Line.net() == playerNet)) return
         releasePlayer()
         newPlayer()
     }
@@ -703,11 +708,18 @@ class PlayerActivity : BaseActivity() {
             if (slow) slowSec++ else slowSec = 0
         }
         slN = fr; slD = dr; slT = now
-        if (slowSec >= 6) { slowSec = 0; slN = -1L; recover("freeze", "immagine a scatti") }
+        if (slowSec >= 6) { slowSec = 0; slN = -1L; learnHeavy(); recover("freeze", "immagine a scatti") }
+    }
+
+    /** immagine a scatti con la decodifica hardware su una versione FHD o 4K: il dispositivo lo impara (Line.heavy, 2 canali in 7 giorni) */
+    private fun learnHeavy() {
+        if (!live || soft || swDecoder()) return
+        val q = row?.l("q")?.toInt() ?: return
+        Line.heavy(q, stallKey())
     }
 
     private fun checkDrain() {
-        if (Remote.player("o.drainQ", "true") == "false") { drainSamples.clear(); return }
+        if (Remote.player("o.drainQ", "true") == "false" || !QualityPolicy.lineDowngrades(Remote.player("o.adaptQ", "true") != "false", Remote.player("p.quality", "auto"))) { drainSamples.clear(); return }
         val p = player ?: return
         val now = mono()
         if (!live || !firstReady || p.playbackState != Player.STATE_READY || !p.isPlaying || problem.isNotEmpty() ||
@@ -716,13 +728,13 @@ class PlayerActivity : BaseActivity() {
             return
         }
         if (now < drainUntil) { drainSamples.clear(); return }
-        drainSamples.add(now to p.totalBufferedDuration)
-        drainSamples.removeAll { now - it.first > 20_000L }
-        val old = drainSamples.lastOrNull { now - it.first >= 10_000L } ?: return
-        val threshold = Players.buf(true, playerCls).rebuffer + 2_000L
-        if (p.totalBufferedDuration >= threshold || old.second - p.totalBufferedDuration < 3_000L) return
+        val cur = p.totalBufferedDuration
+        drainSamples.add(now to cur)
+        drainSamples.removeAll { now - it.first > 25_000L }
+        // calo vero e costante verso lo stallo (non un vuoto del Wi-Fi): solo il canale in onda, i successivi partono pieni
+        if (!QualityPolicy.draining(drainSamples, now, cur, QualityPolicy.drainThreshold(Players.buf(true, playerCls).rebuffer))) return
         val r = row ?: return
-        if (lighterThan(r) == null || !switchLighter(byLine = true)) return
+        if (lighterThan(r) == null || !switchLighter(byLine = true, carry = false)) return
         drainSamples.clear()
         drainUntil = now + 60_000L
         event("stall", "qualità ridotta in anticipo", "risolto", "buffer in calo")
@@ -913,15 +925,16 @@ class PlayerActivity : BaseActivity() {
                 }
             }
         }
-        "lighter" -> if (switchLighter(byLine = problem == "stall")) { lastAction = "versione più leggera"; true } else capHls()
+        "lighter" -> if (switchLighter(byLine = problem == "stall")) { lastAction = "versione più leggera"; true } else capHls(byLine = problem == "stall")
         // cuscinetto un gradino più largo per il resto del canale (+2 s per gradino, fino a +6 s)
         "cushion" -> if (cushionExtra >= 3) false else { cushionExtra++; lastAction = "cuscinetto più largo"; true }
         else -> false
     }
 
     /** HLS a più qualità senza versioni sorelle: tetto ABR al 70 % del bitrate in uso (sotto il tetto l'ABR resta attivo) */
-    private fun capHls(): Boolean {
+    private fun capHls(byLine: Boolean): Boolean {
         if (Remote.player("o.adaptQ", "true") == "false") return false
+        if (byLine && Remote.player("p.quality", "auto") == "max") return false // «Massima»: la linea non abbassa la qualità
         val p = player ?: return false
         if (fmt != "hls") return false
         val br = p.videoFormat?.bitrate ?: return false
@@ -931,7 +944,7 @@ class PlayerActivity : BaseActivity() {
         if (!lower) return false
         hlsCap = (br * 0.7).toInt()
         lastAction = "qualità più bassa"
-        notice("Qualità ridotta per la tua connessione", 5_000)
+        if (byLine) notice("Qualità ridotta per la tua connessione", 5_000)
         seeking = true
         p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setMaxVideoBitrate(hlsCap).build()
         return true
@@ -962,7 +975,7 @@ class PlayerActivity : BaseActivity() {
         if (hlsCap <= 0) return
         hlsCap = 0
         val p = player ?: return
-        try { p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setMaxVideoBitrate(Players.maxQualityBitrate(Remote.player("p.quality", "auto"), playerCls)).build() } catch (_: Exception) {}
+        try { p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setMaxVideoBitrate(Players.maxQualityBitrate(Remote.player("p.quality", "auto"), playerNet)).build() } catch (_: Exception) {}
     }
 
     private fun sendEvents() {
@@ -979,9 +992,13 @@ class PlayerActivity : BaseActivity() {
         return variants.filter { it.q < q && (!it.hevc || hv) }.maxByOrNull { it.q }
     }
 
-    /** [byLine]: la causa è la connessione (solo allora i canali successivi partono ridotti) */
-    private fun switchLighter(byLine: Boolean): Boolean {
+    /**
+     * [byLine]: la causa è la connessione (con «Massima» non si scende); [carry]: anche i canali dei 10 minuti successivi
+     * partono un gradino sotto (solo dopo blocchi veri, non per la discesa anticipata)
+     */
+    private fun switchLighter(byLine: Boolean, carry: Boolean = byLine): Boolean {
         if (Remote.player("o.adaptQ", "true") == "false") return false
+        if (byLine && Remote.player("p.quality", "auto") == "max") return false
         val r = row ?: return false
         if (baseRow?.l("_id") != curId) return false // nel frattempo il cliente ha cambiato canale
         val v = lighterThan(r) ?: return false
@@ -989,7 +1006,8 @@ class PlayerActivity : BaseActivity() {
         reduced = true
         reducedAt = now
         reducedByLine = byLine
-        if (byLine) lighterUntil = now + 10 * 60_000L else stayReduced = true // versione piena guasta: non si riprova
+        if (!byLine) stayReduced = true // versione piena guasta o pesante per il decoder: non si riprova
+        else if (carry) lighterUntil = now + QualityPolicy.CARRY_MS
         notice(if (byLine) "Qualità ridotta per la tua connessione" else "Passo a un'altra versione del canale", 5_000)
         tune(v.id, variant = true)
         return true
@@ -1003,11 +1021,14 @@ class PlayerActivity : BaseActivity() {
         if (now - reducedAt < 6 * 60_000L || now - lastStallAt < 6 * 60_000L) return
         val b = baseRow ?: return
         if (b.l("_id") != curId) return
+        // si torna alla versione piena per questo dispositivo (mai il 4K su una chiavetta o uno schermo che non lo mostrano)
+        val target = if (fullId > 0) fullId else b.l("_id")
+        if (row?.l("_id") == target) { reduced = false; return }
         tryingFull = true
         tryFullAt = now
         reduced = false
         notice("Riprovo la qualità piena…", 3_000)
-        tune(b.l("_id"), variant = true)
+        tune(target, variant = true)
     }
 
     private fun notice(t: String, ms: Long = 3_500) {
@@ -1097,7 +1118,12 @@ class PlayerActivity : BaseActivity() {
     }
 
     /* ---------------- diagnostica in «Online ora» ---------------- */
-    private fun variantLabel(): String = if (reduced) Quality.label(row?.l("q")?.toInt() ?: 2) else "full"
+    /** versione in onda rispetto a quella scelta dal cliente: «full» oppure FHD / HD / SD */
+    private fun variantLabel(): String {
+        val q = row?.l("q")?.toInt() ?: return "full"
+        val q0 = baseRow?.l("q")?.toInt() ?: q
+        return if (q < q0) Quality.label(q) else "full"
+    }
 
     private fun stats(): JSONObject? {
         val p = player ?: return null
@@ -1113,7 +1139,7 @@ class PlayerActivity : BaseActivity() {
         val now = mono()
         stallsHour.removeAll { now - it > 3_600_000L }
         o.put("stallsH", stallsHour.size).put("stalls10", stallsHour.count { now - it < 600_000L }).put("buffers", stallsHour.size).put("dropped", dropped)
-        o.put("reduced", if (reduced) Quality.label(row?.l("q")?.toInt() ?: 2) else "")
+        o.put("reduced", if (live) variantLabel().takeIf { it != "full" } ?: "" else "")
         // Kairos Adaptive: banda (Mbps, solo campioni validi), classi, riempimento all'avvio, primo fotogramma, stalli, versione e formato
         if (Line.bw > 0) o.put("bw", Math.round(Line.bw / 100_000.0) / 10.0)
         o.put("line", Line.line()).put("dev", Line.device()).put("cls", Line.name(playerCls))
@@ -1186,9 +1212,14 @@ class PlayerActivity : BaseActivity() {
         msg.visibility = View.GONE
         showSpin()
         val adapt = Remote.player("o.adaptQ", "true") != "false"
-        val lighter = adapt && !variant && mono() < lighterUntil
-        val capped = !variant && App.max
-        val cls = Line.cls()
+        val qSet = Remote.player("p.quality", "auto")
+        val lighter = QualityPolicy.lineDowngrades(adapt, qSet) && !variant && mono() < lighterUntil
+        val liteMax = !variant && App.max
+        // tetti della versione di partenza: dispositivo e schermo (4K, versione «a scatti» imparata) e linea (solo prove recenti)
+        val dev = Line.device()
+        val screen4k = Line.screen4k(this)
+        val heavyCap = Line.heavyCap()
+        val lineQ = QualityPolicy.lineQ(Line.net() == Line.WEAK, Line.bw, Line.bwFresh())
         val keepVariants = variants
         bg {
             val r0 = Db.one("live", id) ?: run {
@@ -1198,24 +1229,16 @@ class PlayerActivity : BaseActivity() {
             }
             val vars = if (variant) keepVariants else try { Db.variants(r0) } catch (_: Exception) { emptyList() }
             var r = r0
+            var full = r0
             var startReduced = false
-            var startCapped = false
             if (!variant) {
-                val q0 = r0.l("q").toInt()
-                val hv = r0.l("hevc") == 1L
-                // versione di partenza (§5): classe debole ⇒ al massimo HD (SD con banda sotto 2,5 Mbps), normale ⇒ al massimo FHD,
-                // ottima ⇒ piena; dopo un calo recente della linea un gradino sotto la versione scelta
-                var maxQ = if (!adapt) Int.MAX_VALUE else when (cls) {
-                    Line.WEAK -> if (Line.bw in 1L until 2_500_000L) 1 else 2
-                    Line.NORMAL -> 3
-                    else -> 4
-                }
-                if (lighter) maxQ = minOf(maxQ, q0 - 1)
-                if (q0 > maxQ) vars.filter { it.q <= maxQ && (!it.hevc || hv) }.maxByOrNull { it.q }?.let { v -> Db.one("live", v.id)?.let { r = it; startReduced = true } }
-                // «Leggerissima»: se il canale ha anche la versione HD (non HEVC) si parte da quella invece di FHD / 4K
-                if (!startReduced && capped && q0 >= 3) {
-                    vars.firstOrNull { it.q == 2 && !it.hevc }?.let { v -> Db.one("live", v.id)?.let { r = it; startCapped = true } }
-                }
+                // versione di partenza (QualityPolicy.start): con la linea buona quella scelta (sulle chiavette e sugli schermi
+                // non 4K il FHD invece del 4K); più leggera solo con la linea debole adesso o dopo un calo recente
+                val ch = QualityPolicy.V(r0.l("_id"), r0.l("q").toInt(), r0.l("hevc") == 1L)
+                val st = QualityPolicy.start(ch, vars.map { QualityPolicy.V(it.id, it.q, it.hevc) }, adapt, qSet, liteMax, dev, screen4k, heavyCap, lineQ, lighter)
+                if (st.full.id != ch.id) Db.one("live", st.full.id)?.let { full = it }
+                r = full
+                if (st.byLine) Db.one("live", st.start.id)?.let { r = it; startReduced = true }
             }
             val list = Play.liveUrls(r)
             Vpns.awaitForced()
@@ -1225,10 +1248,11 @@ class PlayerActivity : BaseActivity() {
                 if (!variant) {
                     baseRow = r0
                     variants = vars
-                    reduced = startReduced || startCapped
+                    fullId = full.l("_id")
+                    reduced = startReduced
                     reducedByLine = startReduced
                     reducedAt = if (reduced) mono() else 0L
-                    stayReduced = startCapped // scelta dell'utente: non si torna da soli alla versione piena
+                    stayReduced = false
                     tryingFull = false
                     stalls.clear()
                     progs = emptyList()
