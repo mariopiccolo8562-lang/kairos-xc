@@ -305,7 +305,7 @@ object Remote {
     private fun settings(id: Long) {
         val top = App.top
         if (top is SettingsActivity && !top.isFinishing) { done(id, true, "impostazioni già aperte"); return }
-        if (App.isPlayer(top)) top.finish() // la visione si chiude, come in Kairos Pro
+        if (top != null && App.isPlayer(top)) top.finish() // la visione si chiude, come in Kairos Pro
         App.I.startActivity(Intent(App.I, SettingsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         done(id, true, "impostazioni aperte")
     }
