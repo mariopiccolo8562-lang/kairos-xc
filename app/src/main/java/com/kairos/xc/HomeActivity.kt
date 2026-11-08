@@ -127,6 +127,7 @@ class HomeActivity : BaseActivity() {
 
     private fun showSync() {
         when {
+            Sync.running && Sync.quiet -> sync.visibility = View.GONE // chiesto dal pannello: in silenzio
             Sync.running -> { sync.visibility = View.VISIBLE; sync.text = "Aggiornamento liste… ${Sync.pct}%" }
             Sync.error.isNotEmpty() -> { sync.visibility = View.VISIBLE; sync.text = "Liste non aggiornate" }
             else -> sync.visibility = View.GONE

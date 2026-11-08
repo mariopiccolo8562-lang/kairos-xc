@@ -13,14 +13,15 @@ class SettingsActivity : BaseActivity() {
     private var syncSub: TextView? = null
     private var wasRunning = false
     // durante l'aggiornamento cambia solo la riga «Aggiorna liste» (niente sfarfallio del cursore)
+    // aggiornamento chiesto dal pannello (Sync.quiet): mentre è in corso la schermata non cambia
     private val syncL: () -> Unit = {
-        if (!isFinishing) {
+        if (!isFinishing && !(Sync.running && Sync.quiet)) {
             if (Sync.running == wasRunning) syncSub?.text = syncText() else build()
         }
     }
 
     private fun syncText(): String = when {
-        Sync.running -> "In corso… ${Sync.pct}%"
+        Sync.running && !Sync.quiet -> "In corso… ${Sync.pct}%" // quello chiesto dal pannello non si mostra
         Sync.error.isNotEmpty() -> "Ultimo tentativo non riuscito: " + Sync.error
         Store.syncAt > 0 -> "Ultimo aggiornamento alle " + Ui.hm(Store.syncAt)
         else -> "Scarica di nuovo canali, film e serie"

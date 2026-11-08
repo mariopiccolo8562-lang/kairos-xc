@@ -22,6 +22,12 @@ object Sync {
         private set
     @Volatile var error = ""
         private set
+    /**
+     * Aggiornamento chiesto dal pannello (comando «sync»): in silenzio, la Home e le Impostazioni non mostrano né l'avanzamento
+     * né un eventuale errore (i controlli a distanza sono invisibili al cliente). Una richiesta del cliente lo rende visibile.
+     */
+    @Volatile var quiet = false
+        private set
 
     private val listeners = CopyOnWriteArrayList<() -> Unit>()
     fun listen(l: () -> Unit) { listeners.add(l) }
@@ -70,8 +76,8 @@ object Sync {
         }
     }
 
-    fun start(force: Boolean = false) {
-        if (running) return
+    fun start(force: Boolean = false, quiet: Boolean = false) {
+        if (running) { if (!quiet && force) this.quiet = false; return } // il cliente chiede le liste: si vede quello in corso
         val pls = K.active()
         if (pls.isEmpty()) return
         if (!force) when (needed(pls)) {
@@ -80,6 +86,7 @@ object Sync {
             true -> {}
         }
         running = true
+        this.quiet = quiet
         dataOk = ""
         pct = 0
         error = ""
@@ -164,9 +171,10 @@ object Sync {
                 // scaricato senza errori (anche se il server ha mandato liste vuote): non si riscarica di continuo
                 dataOk = ids.joinToString(",")
             } else { failAt = System.currentTimeMillis(); failKey = ids.joinToString(",") }
-            error = errors.joinToString(" · ")
+            // chiesto dal pannello: nessun errore a video (si riprova come sempre)
+            error = if (quiet) "" else errors.joinToString(" · ")
         } catch (t: Throwable) {
-            error = t.message ?: t.javaClass.simpleName
+            error = if (quiet) "" else (t.message ?: t.javaClass.simpleName)
             failAt = System.currentTimeMillis()
             failKey = pls.joinToString(",") { it.id }
         } finally {
@@ -191,11 +199,11 @@ object Sync {
         }
     }
 
-    /** «Aggiorna liste» dalle Impostazioni: si riprova subito anche dopo un errore */
-    fun force() {
+    /** «Aggiorna liste» dalle Impostazioni (o dal pannello, [quiet]): si riprova subito anche dopo un errore */
+    fun force(quiet: Boolean = false) {
         failAt = 0L
         failKey = ""
-        start(force = true)
+        start(force = true, quiet = quiet)
     }
 
     private fun setPct(v: Int) {

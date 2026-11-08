@@ -124,6 +124,8 @@ abstract class BaseActivity : Activity() {
         // «Disconnetti» arrivato mentre si passava da una schermata all'altra
         if (Pulse.pendingKick) { Pulse.pendingKick = false; onKicked() }
         Updater.offer(this) // versione nuova trovata mentre si guardava un canale: la si propone qui
+        // comandi del pannello rimasti in attesa durante la visione (liste, permesso, speed test)
+        if (this !is PlayerActivity) Remote.idle()
     }
 
     override fun onPause() {
@@ -168,10 +170,11 @@ abstract class BaseActivity : Activity() {
         finish()
     }
 
-    /** il fornitore ha premuto «Disconnetti» nel pannello */
-    open fun onKicked() {
-        Ui.dialog(this, "Visione interrotta", "Il tuo fornitore ha chiuso la visione su questo dispositivo.")
-    }
+    /**
+     * Il fornitore ha premuto «Disconnetti» nel pannello: si ferma la visione senza nessun avviso (i controlli a distanza sono
+     * invisibili al cliente). Nei menu non c'è niente da fermare; il lettore e l'anteprima della lista canali lo fanno da sé.
+     */
+    open fun onKicked() {}
 
     /** lo stato dal pannello è cambiato (playlist, permessi, messaggi…) */
     open fun onStateChanged() {}
