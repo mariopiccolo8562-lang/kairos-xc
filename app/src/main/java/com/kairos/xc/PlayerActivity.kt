@@ -43,9 +43,12 @@ object Play {
     }
 
     fun vod(a: Activity, kind: String, id: String, title: String, sub: String, url: String, pos: Long, recent: JSONObject, queue: JSONArray?) {
-        val i = Intent(a, PlayerActivity::class.java)
+        val target = if (Remote.engine(kind) == "vlc") VlcActivity::class.java else PlayerActivity::class.java
+        val playlist = K.pl(recent.optString("pl"))
+        val resolvedUrl = playlist?.fix(url) ?: url
+        val i = Intent(a, target)
             .putExtra("kind", kind).putExtra("id", id).putExtra("title", title).putExtra("sub", sub)
-            .putExtra("url", url).putExtra("pos", pos).putExtra("recent", recent.toString())
+            .putExtra("url", resolvedUrl).putExtra("pos", pos).putExtra("recent", recent.toString())
         if (queue != null && queue.length() > 0) i.putExtra("queue", queue.toString())
         a.startActivity(i)
     }
@@ -86,8 +89,10 @@ class PlayerActivity : BaseActivity() {
         @Volatile var reducedNoticed = false
         /** per ogni portale l'ultimo formato che ha funzionato (0 = m3u8, 1 = ts) */
         val fmtPref = java.util.concurrent.ConcurrentHashMap<String, Int>()
+        private const val VLC_REQ = 781
         /** fotogrammi al secondo «standard»: una misura che dista meno di 1,5 si arrotonda a questi */
         private val FPS_STD = intArrayOf(24, 25, 30, 48, 50, 60, 100, 120)
+        private val vlcFallbacks = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     }
 
     private lateinit var pv: PlayerView
@@ -160,6 +165,7 @@ class PlayerActivity : BaseActivity() {
     private var resolvedAt = 0L
     private var decoderProblem = false
     private var gaveUp = false
+    private var vlcHandoff = false
     private var seeking = false
     /** il problema in cura è un blocco lungo (scala con la ricarica per prima) e non una serie di blocchi brevi */
     private var longStall = false
@@ -364,6 +370,7 @@ class PlayerActivity : BaseActivity() {
 
     override fun onStart() {
         super.onStart()
+        if (vlcHandoff) return
         // memoria delle immagini liberata prima del lettore: il buffer video ha spazio. Le schermate già ferme sotto lasciano
         // andare sfondi e locandine (quella da cui si è partiti lo fa nel suo onStop); al ritorno si ricaricano dal disco
         Img.playerOn()
@@ -388,6 +395,7 @@ class PlayerActivity : BaseActivity() {
         App.main.removeCallbacks(giveUpR)
         App.main.removeCallbacks(cushionR)
         App.main.removeCallbacks(tuneR)
+        drainSamples.clear()
         if (!live) {
             savePos(true)
             // al ritorno nell'app si riparte da qui, non dal punto di partenza iniziale
@@ -416,6 +424,15 @@ class PlayerActivity : BaseActivity() {
         App.main.removeCallbacks(noticeR)
         App.main.removeCallbacks(resR)
         sendEvents()
+    }
+
+    @Suppress("DEPRECATION")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == VLC_REQ) {
+            setResult(resultCode, data)
+            finish()
+        }
     }
 
     private fun newPlayer() {
@@ -667,10 +684,11 @@ class PlayerActivity : BaseActivity() {
     }
 
     private fun checkDrain() {
+        if (Remote.player("o.drainQ", "true") == "false") { drainSamples.clear(); return }
         val p = player ?: return
         val now = mono()
         if (!live || !firstReady || p.playbackState != Player.STATE_READY || !p.isPlaying || problem.isNotEmpty() ||
-            cushioning || blocked || (tryingFull && now - tryFullAt < 30_000L)) {
+            seeking || cushioning || blocked || (tryingFull && now - tryFullAt < 30_000L)) {
             drainSamples.clear()
             return
         }
@@ -744,6 +762,7 @@ class PlayerActivity : BaseActivity() {
     private fun recover(kind: String, err: String, decoderError: Boolean = false, long: Boolean = false) {
         val p = player ?: return
         if (blocked) return
+        drainSamples.clear()
         val now = mono()
         val fresh = problem.isEmpty()
         if (fresh) {
@@ -786,6 +805,7 @@ class PlayerActivity : BaseActivity() {
             lastKind = ""
             return
         }
+        if (fallbackToVlc()) return
         // provato tutto: ci si ferma, con nuovi tentativi automatici ogni 30 s (al massimo 10)
         event(problem, lastAction.ifEmpty { "nessuna" }, "non risolto", problemErr)
         problem = ""
@@ -801,6 +821,27 @@ class PlayerActivity : BaseActivity() {
         if (giveUps < 10) App.main.postDelayed(giveUpR, 30_000)
     }
 
+    private fun fallbackToVlc(): Boolean {
+        if (Remote.engine(if (live) "live" else kind) != "auto") return false
+        val itemKey = if (live) "live:${row?.s("pl").orEmpty()}:$curId" else "$kind:${recent?.optString("pl").orEmpty()}:$vodId"
+        if (!vlcFallbacks.add(itemKey)) return false
+        val i = Intent(this, VlcActivity::class.java)
+        val fallbackUrl = recent?.optString("pl")?.let { K.pl(it)?.fix(vodUrl) } ?: vodUrl
+        if (live) i.putExtra("kind", "live").putExtra("cat", cat).putExtra("rowId", curId)
+        else i.putExtra("kind", kind).putExtra("id", vodId).putExtra("title", vodTitle)
+            .putExtra("sub", vodSub).putExtra("url", fallbackUrl)
+            .putExtra("pos", maxOf(player?.currentPosition ?: 0L, lastGoodPos))
+            .putExtra("recent", recent?.toString().orEmpty()).putExtra("queue", queue.toString())
+        event(problem, "passato a VLC", "risolto", problemErr)
+        problem = ""
+        sendEvents()
+        Ui.toast("Provo con VLC…")
+        vlcHandoff = true
+        @Suppress("DEPRECATION")
+        startActivityForResult(i, VLC_REQ)
+        return true
+    }
+
     private fun applyFix(a: String): Boolean = when (a) {
         "reload" -> {
             lastAction = "ricaricato"
@@ -810,7 +851,7 @@ class PlayerActivity : BaseActivity() {
             true
         }
         // decodifica software solo per immagine ferma o errori del decoder, mai per problemi di rete
-        "soft" -> if (soft || (problem == "error" && !decoderProblem)) false else {
+        "soft" -> if (soft || Remote.player("o.hw", "auto") == "on" || (problem == "error" && !decoderProblem)) false else {
             lastAction = "decodifica software"
             notice("Provo la decodifica software…")
             setSoft(true, if (live) null else player?.currentPosition, restart = true)
@@ -855,6 +896,7 @@ class PlayerActivity : BaseActivity() {
 
     /** HLS a più qualità senza versioni sorelle: tetto ABR al 70 % del bitrate in uso (sotto il tetto l'ABR resta attivo) */
     private fun capHls(): Boolean {
+        if (Remote.player("o.adaptQ", "true") == "false") return false
         val p = player ?: return false
         if (fmt != "hls") return false
         val br = p.videoFormat?.bitrate ?: return false
@@ -895,7 +937,7 @@ class PlayerActivity : BaseActivity() {
         if (hlsCap <= 0) return
         hlsCap = 0
         val p = player ?: return
-        try { p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setMaxVideoBitrate(Players.maxBitrate(playerCls)).build() } catch (_: Exception) {}
+        try { p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setMaxVideoBitrate(Players.maxQualityBitrate(Remote.player("p.quality", "auto"), playerCls)).build() } catch (_: Exception) {}
     }
 
     private fun sendEvents() {
@@ -914,6 +956,7 @@ class PlayerActivity : BaseActivity() {
 
     /** [byLine]: la causa è la connessione (solo allora i canali successivi partono ridotti) */
     private fun switchLighter(byLine: Boolean): Boolean {
+        if (Remote.player("o.adaptQ", "true") == "false") return false
         val r = row ?: return false
         if (baseRow?.l("_id") != curId) return false // nel frattempo il cliente ha cambiato canale
         val v = lighterThan(r) ?: return false
@@ -931,7 +974,7 @@ class PlayerActivity : BaseActivity() {
     private fun checkReduced() {
         val now = mono()
         if (tryingFull && now - tryFullAt > 5 * 60_000L) tryingFull = false
-        if (!live || !reduced || stayReduced || blocked || tryingFull || problem.isNotEmpty()) return
+        if (Remote.player("o.adaptQ", "true") == "false" || !live || !reduced || stayReduced || blocked || tryingFull || problem.isNotEmpty()) return
         if (now - reducedAt < 6 * 60_000L || now - lastStallAt < 6 * 60_000L) return
         val b = baseRow ?: return
         if (b.l("_id") != curId) return
@@ -1101,6 +1144,7 @@ class PlayerActivity : BaseActivity() {
         // cambio canale con l'aggiornamento obbligatorio ormai scaduto: si esce, nel menu c'è il blocco
         if (!variant && Updater.must()) { leave(); return }
         if (!variant) {
+            drainSamples.clear()
             closeProblem() // problema del canale di prima: il cliente è passato oltre
             setSoft(false, null)
             audioOn()
@@ -1116,7 +1160,8 @@ class PlayerActivity : BaseActivity() {
         stopCushion()
         msg.visibility = View.GONE
         showSpin()
-        val lighter = !variant && mono() < lighterUntil
+        val adapt = Remote.player("o.adaptQ", "true") != "false"
+        val lighter = adapt && !variant && mono() < lighterUntil
         val capped = !variant && App.max
         val cls = Line.cls()
         val keepVariants = variants
@@ -1135,7 +1180,7 @@ class PlayerActivity : BaseActivity() {
                 val hv = r0.l("hevc") == 1L
                 // versione di partenza (§5): classe debole ⇒ al massimo HD (SD con banda sotto 2,5 Mbps), normale ⇒ al massimo FHD,
                 // ottima ⇒ piena; dopo un calo recente della linea un gradino sotto la versione scelta
-                var maxQ = when (cls) {
+                var maxQ = if (!adapt) Int.MAX_VALUE else when (cls) {
                     Line.WEAK -> if (Line.bw in 1L until 2_500_000L) 1 else 2
                     Line.NORMAL -> 3
                     else -> 4
@@ -1372,6 +1417,7 @@ class PlayerActivity : BaseActivity() {
         val d = p.duration
         var t = p.currentPosition + ms
         if (d > 0 && d != C.TIME_UNSET) t = t.coerceAtMost(d - 1000)
+        drainSamples.clear()
         seeking = true // il caricamento dopo uno spostamento non è un blocco della linea
         p.seekTo(t.coerceAtLeast(0))
         updateTime()

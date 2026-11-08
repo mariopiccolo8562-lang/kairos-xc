@@ -88,12 +88,12 @@ abstract class BaseActivity : Activity() {
         super.onStop()
         stopped = true
         // si è appena aperto il lettore sopra questa schermata
-        if (this !is PlayerActivity && App.top is PlayerActivity) releaseForPlayer()
+        if (!App.isPlayer(this) && App.isPlayer(App.top)) releaseForPlayer()
     }
 
     /** sopra c'è il lettore: sfondi e locandine di questa schermata via dalla memoria (il buffer video ha spazio) */
     fun releaseForPlayer() {
-        if (imgReleased || this is PlayerActivity || this is ActivationActivity) return
+        if (imgReleased || App.isPlayer(this) || this is ActivationActivity) return
         imgReleased = true
         releaseImages()
         // sfondo della finestra (immagine 960×540): un colore pieno finché la schermata è sotto il lettore
@@ -155,7 +155,7 @@ abstract class BaseActivity : Activity() {
      * nei menu) né nella scelta del profilo stessa. true = questa schermata è stata lasciata.
      */
     fun checkProfile(): Boolean {
-        if (!needsActive || this is PlayerActivity || this is ProfilesActivity || isFinishing) return false
+        if (!needsActive || App.isPlayer(this) || this is ProfilesActivity || isFinishing) return false
         if (!K.profileGone()) return false
         startActivity(Intent(this, ProfilesActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
         finish()

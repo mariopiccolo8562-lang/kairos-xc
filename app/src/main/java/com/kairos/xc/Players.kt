@@ -33,7 +33,8 @@ object Players {
     /** buffer per classe (KAIROS_ADAPTIVE §2): min / max / avvio / ripresa in ms, tetto in MB, back buffer in ms */
     class Buf(val min: Int, val max: Int, val start: Int, val rebuffer: Int, val mb: Int, val back: Int)
 
-    fun buf(live: Boolean, cls: Int): Buf = if (live) when (cls) {
+    fun buf(live: Boolean, cls: Int, mode: String = Remote.player("p.buffer", "balanced")): Buf {
+        val b = (if (live) when (cls) {
         Line.WEAK -> Buf(12_000, 30_000, 1_500, 6_000, 16, 0)
         Line.GOOD -> Buf(15_000, 60_000, 800, 3_000, 32, 0)
         else -> Buf(15_000, 50_000, 1_000, 4_000, 24, 0)
@@ -41,10 +42,24 @@ object Players {
         Line.WEAK -> Buf(20_000, 40_000, 2_500, 4_000, 32, 6_000)
         Line.GOOD -> Buf(25_000, 90_000, 800, 2_500, 64, 12_000)
         else -> Buf(20_000, 60_000, 1_000, 3_000, 48, 10_000)
+        })
+        val scale = when (mode) { "fast" -> 0.6; "stable" -> 1.6; else -> 1.0 }
+        val min = (b.min * scale).toInt().coerceAtLeast(1)
+        val max = (b.max * scale).toInt().coerceAtLeast(min)
+        val mb = (b.mb * scale).toInt().coerceAtLeast(4)
+        val back = (b.back * scale).toInt().coerceAtLeast(0)
+        return Buf(min, max, (b.start * scale).toInt().coerceIn(1, min), (b.rebuffer * scale).toInt().coerceIn(1, max), mb, back)
     }
 
     /** tetto di bitrate dell'ABR per classe (§4): sotto il tetto l'ABR resta attivo */
     fun maxBitrate(cls: Int): Int = if (cls == Line.WEAK) 5_000_000 else Int.MAX_VALUE
+    fun maxQualityBitrate(quality: String, cls: Int): Int = when (quality) {
+        "480" -> 2_000_000
+        "720" -> 4_000_000
+        "1080" -> 8_000_000
+        "max" -> Int.MAX_VALUE
+        else -> maxBitrate(cls)
+    }
 
     /** anteprima nella lista canali in corso (niente lavori di fondo nel frattempo) */
     @Volatile var previewing = false
@@ -68,7 +83,7 @@ object Players {
     }
 
     /** [soft] = decodifica software (rimedio quando il decoder hardware si blocca); [cls] = classe effettiva (Line.cls()) */
-    fun build(ctx: Context, live: Boolean, soft: Boolean = false, preview: Boolean = false, cls: Int = Line.cls()): ExoPlayer {
+    fun build(ctx: Context, live: Boolean, soft: Boolean = false, preview: Boolean = false, cls: Int = Line.cls(), quality: String = Remote.player("p.quality", "auto"), hw: String = Remote.player("o.hw", "auto")): ExoPlayer {
         val http = DefaultHttpDataSource.Factory()
             .setUserAgent(Http.UA)
             .setAllowCrossProtocolRedirects(true)
@@ -109,7 +124,9 @@ object Players {
         val renderers = KxRenderersFactory(ctx)
             .setEnableDecoderFallback(true)
             .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF)
-        if (soft) renderers.setMediaCodecSelector { mime, secure, tunneling ->
+        if (hw == "on") renderers.setMediaCodecSelector { mime, secure, tunneling ->
+            MediaCodecUtil.getDecoderInfos(mime, secure, tunneling).filterNot { it.softwareOnly }
+        } else if (hw == "off" || soft) renderers.setMediaCodecSelector { mime, secure, tunneling ->
             MediaCodecUtil.getDecoderInfos(mime, secure, tunneling).sortedBy { if (it.softwareOnly) 0 else 1 }
         }
         // stima iniziale: la banda salvata (×0,8) oppure 2 / 6 / 12 Mbps per classe; l'anteprima non insegna niente alla linea
@@ -125,11 +142,14 @@ object Players {
         selector.setParameters(selector.buildUponParameters().setViewportSizeToPhysicalDisplaySize(ctx, true).setPreferredAudioLanguage("it"))
         // anteprima: nei canali HLS con più qualità si prende la più bassa adatta al riquadro
         if (preview) selector.setParameters(selector.buildUponParameters().setMaxVideoSize(960, 540).setMaxVideoBitrate(3_000_000))
-        else {
+        else if (quality == "auto") {
             // classe debole: tetto 1080p e 5 Mbps (mai forceHighestSupportedBitrate: sotto il tetto l'ABR resta attivo)
             if (cls == Line.WEAK) selector.setParameters(selector.buildUponParameters().setMaxVideoSize(1920, 1080).setMaxVideoBitrate(maxBitrate(cls)))
             // «Leggerissima»: con i flussi a più qualità si resta a 720p, il decoder delle chiavette vecchie respira
             if (App.max) selector.setParameters(selector.buildUponParameters().setMaxVideoSize(1280, 720))
+        } else if (quality in listOf("1080", "720", "480")) {
+            val cap = when (quality) { "1080" -> 1920 to 1080; "720" -> 1280 to 720; else -> 854 to 480 }
+            selector.setParameters(selector.buildUponParameters().setMaxVideoSize(cap.first, cap.second).setMaxVideoBitrate(maxQualityBitrate(quality, cls)))
         }
         val p = ExoPlayer.Builder(ctx, renderers)
             .setBandwidthMeter(meter)

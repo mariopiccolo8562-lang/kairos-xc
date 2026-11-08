@@ -73,7 +73,8 @@ class SearchActivity : BaseActivity() {
             "live" -> {
                 if (Updater.blocked(this)) return // aggiornamento obbligatorio: prima l'installazione
                 Store.setLastLive(h.id, h.k)
-                startActivity(Intent(this, PlayerActivity::class.java).putExtra("kind", "live").putExtra("cat", h.cat).putExtra("rowId", h.id))
+                val target = if (Remote.engine("live") == "vlc") VlcActivity::class.java else PlayerActivity::class.java
+                startActivity(Intent(this, target).putExtra("kind", "live").putExtra("cat", h.cat).putExtra("rowId", h.id))
             }
             else -> open(DetailActivity::class.java) { putExtra("table", h.table); putExtra("id", h.id); putExtra("k", h.k) }
         }

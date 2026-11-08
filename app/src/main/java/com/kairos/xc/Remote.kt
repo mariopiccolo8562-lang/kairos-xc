@@ -17,6 +17,16 @@ import kotlin.system.exitProcess
  * - L'app riporta le sue impostazioni attuali (cfg) e la versione della configurazione applicata (rcv).
  */
 object Remote {
+    private val playerValues = mapOf(
+        "o.engLive" to listOf("auto", "exo", "vlc"),
+        "o.engMovie" to listOf("auto", "exo", "vlc"),
+        "o.engSeries" to listOf("auto", "exo", "vlc"),
+        "o.hw" to listOf("auto", "on", "off"),
+        "o.adaptQ" to listOf("true", "false"),
+        "o.drainQ" to listOf("true", "false"),
+        "p.quality" to listOf("auto", "max", "1080", "720", "480"),
+        "p.buffer" to listOf("fast", "balanced", "stable"),
+    )
     private var cache: JSONObject? = null
     private var cacheRaw: String? = null
 
@@ -37,6 +47,23 @@ object Remote {
     /** finestra «Privacy e condizioni»: skip = il fornitore ha deciso di non mostrarla */
     val privacy: String? get() = str("privacy")?.takeIf { it == "show" || it == "skip" }
     fun imposed(k: String): Boolean = str(k) != null
+    fun value(k: String): String? {
+        val values = playerValues[k] ?: return null
+        return rc().opt(k)?.toString()?.takeIf { it in values }
+    }
+    fun allow(k: String): List<String>? {
+        val values = playerValues[k] ?: return null
+        val a = rc().optJSONArray("$k:allow") ?: return null
+        return (0 until a.length()).mapNotNull { a.opt(it)?.toString()?.takeIf { v -> v in values } }.distinct().takeIf { it.isNotEmpty() }
+    }
+    fun eff(k: String, stored: String?, default: String): String {
+        value(k)?.let { return it }
+        val allowed = allow(k) ?: return stored?.takeIf { it in (playerValues[k] ?: emptyList()) } ?: default
+        return stored?.takeIf { it in allowed } ?: default.takeIf { it in allowed } ?: allowed.first()
+    }
+    fun player(k: String, default: String): String = eff(k, Store.playerOption(k, default), default)
+    fun engineKey(kind: String): String = when (kind) { "live" -> "o.engLive"; "series" -> "o.engSeries"; else -> "o.engMovie" }
+    fun engine(kind: String): String = player(engineKey(kind), "auto")
 
     /** permesso di Android «Installa app sconosciute» (serve per installare gli aggiornamenti): nessuna app può darselo da sola */
     fun canInstall(): Boolean = Build.VERSION.SDK_INT < 26 || App.I.packageManager.canRequestPackageInstalls()
@@ -59,7 +86,7 @@ object Remote {
             val wasMax = App.max
             App.lite = App.I.detectLite()
             App.max = Store.liteMode == "max"
-            if (Store.liteMode != liteBefore && (App.lite != wasLite || App.max != wasMax) && App.top !is PlayerActivity) restart()
+            if (Store.liteMode != liteBefore && (App.lite != wasLite || App.max != wasMax) && !App.isPlayer(App.top)) restart()
             else (App.top as? BaseActivity)?.stateChanged()
         }
     }
@@ -74,6 +101,14 @@ object Remote {
         .put("liteOn", if (App.max) "max" else if (App.lite) "on" else "off")
         .put("preview", Store.preview)
         .put("bgupd", if (Store.bgUpdate) "on" else "off")
+        .put("o.engLive", player("o.engLive", "auto"))
+        .put("o.engMovie", player("o.engMovie", "auto"))
+        .put("o.engSeries", player("o.engSeries", "auto"))
+        .put("o.hw", player("o.hw", "auto"))
+        .put("o.adaptQ", player("o.adaptQ", "true"))
+        .put("o.drainQ", player("o.drainQ", "true"))
+        .put("p.quality", player("p.quality", "auto"))
+        .put("p.buffer", player("p.buffer", "balanced"))
         .put("inst", if (canInstall()) "on" else "off")
 
     /** risposta del battito: configurazione e comandi */
@@ -90,7 +125,7 @@ object Remote {
 
     private fun run(id: Long, c: String) {
         ui {
-            val watching = App.top is PlayerActivity
+            val watching = App.isPlayer(App.top)
             when (c) {
                 "reload" -> { ack(id, true, "riavvio"); App.main.postDelayed({ restart() }, 700) }
                 "cache" -> { ack(id, true, "cache svuotata"); App.main.postDelayed({ bg { clearAll(); ui { restart() } } }, 700) }
@@ -106,7 +141,7 @@ object Remote {
                 "pin" -> {
                     Parental.reset(); ack(id, true, "PIN riportato a 0000")
                     Ui.toast("Il fornitore ha reimpostato il PIN del controllo genitori: ora è 0000")
-                    val a = App.top; if (a != null && a !is PlayerActivity) App.main.postDelayed({ Parental.firstRun(a, true) }, 1200)
+                    val a = App.top; if (a != null && !App.isPlayer(a)) App.main.postDelayed({ Parental.firstRun(a, true) }, 1200)
                 }
                 // prima il battito «vado in sfondo» (al massimo 1,5 s di attesa), poi si chiude come prima
                 "exit" -> { ack(id, true, "chiusa"); Pulse.leave(1_500) { App.main.postDelayed({ try { App.top?.finishAffinity() } catch (_: Exception) {}; App.main.postDelayed({ exitProcess(0) }, 300) }, 700) } }

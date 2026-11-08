@@ -101,6 +101,21 @@ class SettingsActivity : BaseActivity() {
         }
         wasRunning = Sync.running
         syncSub = row(R.drawable.ic_refresh, "Aggiorna liste", syncText(), "") { Sync.force(); build() }
+        val section = TextView(this).apply {
+            text = "Lettore"
+            textSize = 18f
+            setTextColor(androidx.core.content.ContextCompat.getColor(this@SettingsActivity, R.color.text2))
+            setPadding(Ui.dp(this@SettingsActivity, 8), Ui.dp(this@SettingsActivity, 16), 0, Ui.dp(this@SettingsActivity, 4))
+        }
+        rows.addView(section)
+        playerSetting("o.engLive", "Lettore TV in diretta", "auto", listOf("auto", "exo", "vlc"))
+        playerSetting("o.engMovie", "Lettore film", "auto", listOf("auto", "exo", "vlc"))
+        playerSetting("o.engSeries", "Lettore serie", "auto", listOf("auto", "exo", "vlc"))
+        playerSetting("o.hw", "Decodifica", "auto", listOf("auto", "on", "off"))
+        playerSetting("o.adaptQ", "Qualità adattiva", "true", listOf("true", "false"))
+        playerSetting("o.drainQ", "Discesa anticipata", "true", listOf("true", "false"))
+        playerSetting("p.quality", "Qualità video", "auto", listOf("auto", "max", "1080", "720", "480"))
+        playerSetting("p.buffer", "Buffer", "balanced", listOf("fast", "balanced", "stable"))
         // bloccata anche senza il permesso «lite» del cliente: la decide il fornitore (quella imposta, altrimenti automatica)
         val liteFixed = Remote.imposed("lite") || !K.liteAllowed()
         val liteVal = when (Store.liteMode) { "on" -> "Sempre"; "max" -> "Leggerissima"; "off" -> "Mai"; else -> "Automatica" } + (if (liteFixed) " · fornitore" else "")
@@ -138,6 +153,30 @@ class SettingsActivity : BaseActivity() {
         if (click != null) v.setOnClickListener { click() }
         rows.addView(v)
         return v.findViewById(R.id.sub)
+    }
+
+    private fun playerSetting(key: String, title: String, default: String, options: List<String>) {
+        val value = Remote.player(key, default)
+        val imposed = Remote.value(key) != null
+        val labels = when (key) {
+            "o.engLive", "o.engMovie", "o.engSeries" -> mapOf("auto" to "Automatico (ExoPlayer, poi VLC)", "exo" to "ExoPlayer", "vlc" to "VLC")
+            "o.hw" -> mapOf("auto" to "Automatica", "on" to "Hardware", "off" to "Software")
+            "o.adaptQ", "o.drainQ" -> mapOf("true" to "Sì", "false" to "No")
+            "p.quality" -> mapOf("auto" to "Automatica", "max" to "Massima", "1080" to "1080p", "720" to "720p", "480" to "480p")
+            else -> mapOf("fast" to "Piccolo (veloce)", "balanced" to "Normale", "stable" to "Grande (stabile)")
+        }
+        val allowed = Remote.allow(key)?.filter { it in options } ?: options
+        val shown = labels[value] ?: value
+        row(R.drawable.ic_tv, title, "", shown + if (imposed) " · fornitore" else "") {
+            if (imposed) Ui.toast("Impostazione scelta dal tuo fornitore")
+            else {
+                val choices = allowed.ifEmpty { options }
+                Ui.choose(this, title, choices.map { labels[it] ?: it }.toTypedArray(), choices.indexOf(value).coerceAtLeast(0)) { i ->
+                    Store.setPlayerOption(key, choices[i])
+                    build()
+                }
+            }
+        }
     }
 
     private fun linkCode() {

@@ -216,7 +216,7 @@ object Pulse {
         App.lite = App.I.detectLite()
         App.max = Store.liteMode == "max"
         Vpns.apply(a)
-        if (App.top !is PlayerActivity) Sync.start() // mai durante la visione
+        if (!App.isPlayer(App.top)) Sync.start() // mai durante la visione
         a?.stateChanged()
         // profilo in uso tolto dal pannello: di nuovo «Chi guarda?» (durante la visione al ritorno nel menu, vedi BaseActivity)
         a?.checkProfile()
