@@ -33,6 +33,16 @@ import kotlin.system.exitProcess
  * - L'app riporta le sue impostazioni attuali (cfg) e la versione della configurazione applicata (rcv).
  */
 object Remote {
+    private val playerValues = mapOf(
+        "o.engLive" to listOf("auto", "exo", "vlc"),
+        "o.engMovie" to listOf("auto", "exo", "vlc"),
+        "o.engSeries" to listOf("auto", "exo", "vlc"),
+        "o.hw" to listOf("auto", "on", "off"),
+        "o.adaptQ" to listOf("true", "false"),
+        "o.drainQ" to listOf("true", "false"),
+        "p.quality" to listOf("auto", "max", "1080", "720", "480"),
+        "p.buffer" to listOf("fast", "balanced", "stable"),
+    )
     @Volatile private var cache: JSONObject? = null
     @Volatile private var cacheRaw: String? = null
 
@@ -53,6 +63,23 @@ object Remote {
     /** finestra «Privacy e condizioni»: skip = il fornitore ha deciso di non mostrarla */
     val privacy: String? get() = str("privacy")?.takeIf { it == "show" || it == "skip" }
     fun imposed(k: String): Boolean = str(k) != null
+    fun value(k: String): String? {
+        val values = playerValues[k] ?: return null
+        return rc().opt(k)?.toString()?.takeIf { it in values }
+    }
+    fun allow(k: String): List<String>? {
+        val values = playerValues[k] ?: return null
+        val a = rc().optJSONArray("$k:allow") ?: return null
+        return (0 until a.length()).mapNotNull { a.opt(it)?.toString()?.takeIf { v -> v in values } }.distinct().takeIf { it.isNotEmpty() }
+    }
+    fun eff(k: String, stored: String?, default: String): String {
+        value(k)?.let { return it }
+        val allowed = allow(k) ?: return stored?.takeIf { it in (playerValues[k] ?: emptyList()) } ?: default
+        return stored?.takeIf { it in allowed } ?: default.takeIf { it in allowed } ?: allowed.first()
+    }
+    fun player(k: String, default: String): String = eff(k, Store.playerOption(k, default), default)
+    fun engineKey(kind: String): String = when (kind) { "live" -> "o.engLive"; "series" -> "o.engSeries"; else -> "o.engMovie" }
+    fun engine(kind: String): String = player(engineKey(kind), "auto")
 
     /** permesso di Android «Installa app sconosciute» (serve per installare gli aggiornamenti): nessuna app può darselo da sola */
     fun canInstall(): Boolean = Build.VERSION.SDK_INT < 26 || App.I.packageManager.canRequestPackageInstalls()
@@ -80,7 +107,7 @@ object Remote {
             val wasMax = App.max
             App.lite = App.I.detectLite()
             App.max = Store.liteMode == "max"
-            if (Store.liteMode != liteBefore && (App.lite != wasLite || App.max != wasMax) && App.top !is PlayerActivity) restart()
+            if (Store.liteMode != liteBefore && (App.lite != wasLite || App.max != wasMax) && !App.isPlayer(App.top)) restart()
             else (App.top as? BaseActivity)?.stateChanged()
         }
     }
@@ -95,6 +122,14 @@ object Remote {
         .put("liteOn", if (App.max) "max" else if (App.lite) "on" else "off")
         .put("preview", Store.preview)
         .put("bgupd", if (Store.bgUpdate) "on" else "off")
+        .put("o.engLive", player("o.engLive", "auto"))
+        .put("o.engMovie", player("o.engMovie", "auto"))
+        .put("o.engSeries", player("o.engSeries", "auto"))
+        .put("o.hw", player("o.hw", "auto"))
+        .put("o.adaptQ", player("o.adaptQ", "true"))
+        .put("o.drainQ", player("o.drainQ", "true"))
+        .put("p.quality", player("p.quality", "auto"))
+        .put("p.buffer", player("p.buffer", "balanced"))
         .put("inst", if (canInstall()) "on" else "off")
 
     /* ---------------- comandi ---------------- */
@@ -140,11 +175,11 @@ object Remote {
     /** una schermata dei menu è in primo piano (non il lettore) */
     private fun menuOn(): Boolean {
         val a = App.top
-        return a != null && a !is PlayerActivity && !a.isFinishing
+        return a != null && !App.isPlayer(a) && !a.isFinishing
     }
 
     /** un lettore è attivo: schermo intero o anteprima nella lista canali (la banda serve al video) */
-    private fun playing(): Boolean = App.top is PlayerActivity || Players.previewing
+    private fun playing(): Boolean = App.isPlayer(App.top) || Players.previewing
 
     /**
      * Il comando [c] deve aspettare: liste e permesso finché c'è il lettore, lo speed test anche durante l'anteprima nella
@@ -270,7 +305,7 @@ object Remote {
     private fun settings(id: Long) {
         val top = App.top
         if (top is SettingsActivity && !top.isFinishing) { done(id, true, "impostazioni già aperte"); return }
-        if (top is PlayerActivity) top.finish() // la visione si chiude, come in Kairos Pro
+        if (top != null && App.isPlayer(top)) top.finish() // la visione si chiude, come in Kairos Pro
         App.I.startActivity(Intent(App.I, SettingsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         done(id, true, "impostazioni aperte")
     }

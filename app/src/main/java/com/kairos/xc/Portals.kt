@@ -67,9 +67,9 @@ object Portals {
     }
 
     fun probe(pls: List<Playlist>) {
-        if (App.top is PlayerActivity) return
+        if (App.isPlayer(App.top)) return
         for (p in pls) {
-            if (App.top is PlayerActivity || p.mode != "auto") continue
+            if (App.isPlayer(App.top) || p.mode != "auto") continue
             val candidates = cands(p)
             if (candidates.size < 2) continue
             val now = System.currentTimeMillis()
@@ -78,7 +78,7 @@ object Portals {
             var best = ""
             var fastest = Long.MAX_VALUE
             for (candidate in candidates) {
-                if (App.top is PlayerActivity) break
+                if (App.isPlayer(App.top)) break
                 if (isBad(candidate)) continue
                 val started = System.nanoTime()
                 try {

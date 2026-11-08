@@ -52,6 +52,8 @@ object Store {
 
     private fun s(k: String, d: String = ""): String = p.getString(k, d) ?: d
     private fun put(k: String, v: String) = p.edit().putString(k, v).apply()
+    fun playerOption(k: String, default: String): String = s("player_$k", default)
+    fun setPlayerOption(k: String, value: String) = put("player_$k", value)
     private fun portalKey(origin: String) = origin.trim().replace(Regex("^https?://", RegexOption.IGNORE_CASE), "").trimEnd('/').lowercase()
 
     fun portalChoice(id: String): String = s("ptl_$id")

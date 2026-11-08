@@ -112,7 +112,7 @@ object Sync {
         try {
             Vpns.awaitForced() // VPN «sempre attiva»: le liste passano dalla VPN
             val active = K.active()
-            if (App.top !is PlayerActivity && active.map { it.id } == pls.map { it.id }) Portals.probe(active)
+            if (!App.isPlayer(App.top) && active.map { it.id } == pls.map { it.id }) Portals.probe(active)
             val db = Db.w
             // sul disco restano il portale in uso e quello usato prima (per tornarci al volo); gli altri si tolgono
             val assigned = K.playlists().map { it.id }
@@ -194,7 +194,7 @@ object Sync {
      */
     private fun awaitNoPlayer() {
         val until = System.currentTimeMillis() + 30 * 60_000L
-        while ((App.top is PlayerActivity || Players.previewing) && System.currentTimeMillis() < until) {
+        while ((App.isPlayer(App.top) || Players.previewing) && System.currentTimeMillis() < until) {
             try { Thread.sleep(3_000) } catch (_: InterruptedException) { return }
         }
     }

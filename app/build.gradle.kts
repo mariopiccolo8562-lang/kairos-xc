@@ -20,8 +20,8 @@ android {
         // 22 = Android 5.1: Fire TV Stick di 1ª e 2ª generazione (Fire OS 5) comprese
         minSdk = 22
         targetSdk = 35
-        versionCode = env("VERSION_CODE")?.toInt() ?: 1
-        versionName = env("VERSION_NAME") ?: "1.0.0"
+        versionCode = env("VERSION_CODE")?.toInt() ?: 2
+        versionName = env("VERSION_NAME") ?: "1.0.1"
         resValue("string", "app_name", env("XC_APP_NAME") ?: "Kairos XC")
         buildConfigField("String", "SERVER_URL", "\"$serverUrl\"")
         buildConfigField("String", "UPDATE_URL", "\"$updateUrl\"")
@@ -70,6 +70,7 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.4.1")
     implementation("androidx.media3:media3-exoplayer-hls:1.4.1")
     implementation("androidx.media3:media3-ui:1.4.1")
+    implementation("org.videolan.android:libvlc-all:3.6.0")
     implementation("com.github.bumptech.glide:glide:4.16.0")
     // avvio più rapido: Android compila subito le parti usate all'apertura (regole in src/main/baseline-prof.txt)
     implementation("androidx.profileinstaller:profileinstaller:1.3.1")

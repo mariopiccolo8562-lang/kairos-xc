@@ -80,6 +80,7 @@ class App : Application() {
 
     companion object {
         lateinit var I: App
+        fun isPlayer(a: Activity?): Boolean = a is PlayerActivity || a is VlcActivity
         @Volatile var lite = false
         /** «Leggerissima»: per le chiavette più vecchie (liste senza loghi, immagini più piccole, canali in HD) */
         @Volatile var max = false

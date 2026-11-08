@@ -434,8 +434,9 @@ class LiveActivity : BaseActivity() {
         stopVideo()
         releaseVideo() // un solo decoder alla volta: l'anteprima si chiude prima dello schermo intero
         Store.setLastLive(id, k)
+        val target = if (Remote.engine("live") == "vlc") VlcActivity::class.java else PlayerActivity::class.java
         @Suppress("DEPRECATION")
-        startActivityForResult(Intent(this, PlayerActivity::class.java).putExtra("kind", "live").putExtra("cat", curCat).putExtra("rowId", id), 7)
+        startActivityForResult(Intent(this, target).putExtra("kind", "live").putExtra("cat", curCat).putExtra("rowId", id), 7)
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {

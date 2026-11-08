@@ -106,7 +106,7 @@ object Updater {
                 val (reached, u) = checkNow(null, force = true)
                 info = when {
                     u != null -> "versione " + u.ver + when {
-                        App.top is PlayerActivity -> ": proposta a fine visione"
+                        App.isPlayer(App.top) -> ": proposta a fine visione"
                         ready != null -> " pronta: proposta al cliente"
                         busy.get() -> " in scaricamento"
                         else -> ": proposta al cliente"
@@ -168,7 +168,7 @@ object Updater {
     private class Paused : Exception()
 
     /** un lettore è attivo (schermo intero o anteprima nella lista canali): la banda serve al video */
-    private fun watching(): Boolean = App.top is PlayerActivity || Players.previewing
+    private fun watching(): Boolean = App.isPlayer(App.top) || Players.previewing
 
     /** scaricamento in background (chiamato da un thread di lavoro): nessuna finestra; quando è pronto si propone «Installa ora» */
     private fun prefetch(u: Upd) {
@@ -183,7 +183,7 @@ object Updater {
             ui {
                 // il cliente aveva già premuto «Aggiorna ora»: si installa subito, senza chiederlo di nuovo
                 val a = App.top
-                if (installWhenReady && a != null && a !is PlayerActivity && !a.isFinishing) { install(a, out); return@ui }
+                if (installWhenReady && a != null && !App.isPlayer(a) && !a.isFinishing) { install(a, out); return@ui }
                 askedCode = 0
                 offer(App.top)
             }
@@ -251,7 +251,7 @@ object Updater {
      * all'apertura e al ritorno. Una proposta arrivata durante la visione compare così al ritorno nel menu, mai dietro il lettore.
      */
     fun offer(a: Activity?) {
-        if (a == null || a.isFinishing || a is PlayerActivity) return
+        if (a == null || a.isFinishing || App.isPlayer(a)) return
         if (resumeInstall(a)) return
         val u = pending ?: return
         if (must()) { if (!busy.get()) prompt(a, u); return }
@@ -268,7 +268,7 @@ object Updater {
     fun blocked(a: Activity): Boolean {
         if (!must()) return false
         val u = pending ?: return false
-        if (!busy.get() && !a.isFinishing && a !is PlayerActivity) prompt(a, u)
+        if (!busy.get() && !a.isFinishing && !App.isPlayer(a)) prompt(a, u)
         return true
     }
 
