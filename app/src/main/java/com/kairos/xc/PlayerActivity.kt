@@ -766,10 +766,10 @@ class PlayerActivity : BaseActivity() {
         if (fresh && kind == "stall" && reduced && reducedByLine && switchLighter(byLine = true)) { lastAction = "versione più leggera"; fixAt = now; return }
         val ladder = if (live) when (problem) {
             "freeze" -> listOf("reload", "soft", "alt", "lighter")
-            "stall" -> listOf("reload", "server", "alt", "lighter")
+            "stall" -> if (longStall) listOf("reload", "server", "alt", "lighter") else listOf("lighter", "alt", "cushion")
             else -> listOf("reload", "server", "alt", "soft", "lighter")
         } else when (problem) {
-            "stall" -> listOf("reload", "server", "reload")
+            "stall" -> if (longStall) listOf("reload", "server", "reload") else listOf("cushion", "cushion")
             else -> listOf("reload", "server", "soft")
         }
         // stesso problema tornato dopo l'ultima soluzione possibile: si ricomincia (una volta) dal primo passo
