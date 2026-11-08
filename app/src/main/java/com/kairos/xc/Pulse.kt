@@ -95,10 +95,11 @@ object Pulse {
         hbPool.execute { App.main.post(go) }
     }
 
-    /** chiamato dal player quando inizia o finisce una visione */
+    /** chiamato dal player (e dall'anteprima della lista canali) quando inizia o finisce una visione */
     fun watch(w: Watch?) {
         watching = w
         beat(true)
+        if (w == null) Remote.idle() // visione finita: partono i comandi del pannello rimasti in attesa
     }
 
     fun beat(force: Boolean) {
@@ -165,7 +166,8 @@ object Pulse {
     }
 
     private fun handle(j: JSONObject) {
-        Remote.onBeat(j) // controllo remoto: impostazioni imposte e comandi
+        // controllo remoto: impostazioni imposte e comandi (un errore lì non ferma il resto: «Disconnetti», permessi, stato)
+        try { Remote.onBeat(j) } catch (t: Throwable) { Log.w("KairosXC", "rc", t) }
         val sat = j.optJSONArray("sat")
         if (sat != null) for (i in 0 until sat.length()) Portals.markBad(sat.optString(i), 30 * 60_000L)
         val kick = j.optLong("kick", 0)

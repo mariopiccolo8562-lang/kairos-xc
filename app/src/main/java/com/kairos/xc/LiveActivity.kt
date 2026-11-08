@@ -137,6 +137,11 @@ class LiveActivity : BaseActivity() {
         stopVideo()
     }
 
+    /** «Disconnetti» dal pannello: anche l'anteprima nel riquadro si ferma, in silenzio (prima continuava sotto l'avviso) */
+    override fun onKicked() {
+        stopVideo()
+    }
+
     override fun onStop() {
         super.onStop()
         releaseVideo() // lettore dell'anteprima liberato: si ricrea al prossimo OK

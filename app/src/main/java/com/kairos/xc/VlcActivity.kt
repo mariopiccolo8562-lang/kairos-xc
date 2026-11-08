@@ -120,6 +120,12 @@ class VlcActivity : BaseActivity() {
         for (a in App.alive.toList()) if (a !== this && a is BaseActivity && a.stopped) a.releaseForPlayer()
     }
 
+    override fun onKicked() {
+        if (::mp.isInitialized) io.execute { try { mp.stop() } catch (_: Exception) {} }
+        Pulse.watch(null)
+        finish()
+    }
+
     override fun onStop() {
         super.onStop()
         if (!live && vodId.isNotEmpty()) Store.setPosition(vodId, mp.time.coerceAtLeast(0L), mp.length.coerceAtLeast(0L))

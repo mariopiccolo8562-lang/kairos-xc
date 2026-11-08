@@ -91,20 +91,42 @@ object Updater {
         bg { try { check(null) } finally { checking.set(false) } }
     }
 
-    /** il pannello chiede l'aggiornamento (upd nel battito o comando «update»): controllo subito, scaricamento in background e proposta */
-    fun fromPanel(done: ((String) -> Unit)? = null) {
-        if (!checking.compareAndSet(false, true)) { done?.invoke("controllo già in corso"); return }
+    /**
+     * Il pannello chiede l'aggiornamento (upd nel battito o comando «update»): controllo subito, scaricamento in background e
+     * proposta. [done] riceve l'esito per la conferma del comando: false = controllo non riuscito (prima, senza rete o con
+     * GitHub irraggiungibile, la conferma diceva «già aggiornata»).
+     */
+    fun fromPanel(done: ((Boolean, String) -> Unit)? = null) {
+        if (!checking.compareAndSet(false, true)) { done?.invoke(true, "controllo già in corso"); return }
         lastCheck = SystemClock.elapsedRealtime()
         bg {
+            var ok = true
+            var info = ""
             try {
-                val u = check(null, force = true)
-                done?.invoke(if (u == null) "già aggiornata (" + BuildConfig.VERSION_NAME + ")" else when { App.isPlayer(App.top) -> "versione " + u.ver + ": proposta a fine visione"; ready != null -> "versione " + u.ver + " pronta: proposta al cliente"; else -> "versione " + u.ver + " in scaricamento" })
+                val (reached, u) = checkNow(null, force = true)
+                info = when {
+                    u != null -> "versione " + u.ver + when {
+                        App.isPlayer(App.top) -> ": proposta a fine visione"
+                        ready != null -> " pronta: proposta al cliente"
+                        busy.get() -> " in scaricamento"
+                        else -> ": proposta al cliente"
+                    }
+                    reached -> "già aggiornata (" + BuildConfig.VERSION_NAME + ")"
+                    else -> { ok = false; "controllo non riuscito: GitHub non raggiungibile dal dispositivo" }
+                }
+            } catch (t: Throwable) {
+                ok = false
+                info = "controllo non riuscito: " + (t.message ?: t.javaClass.simpleName)
             } finally { checking.set(false) }
+            done?.invoke(ok, info)
         }
     }
 
     /** [manual] = schermata da cui l'utente ha chiesto il controllo (riceve anche «nessun aggiornamento»); [force] = anche su rete a consumo */
-    fun check(manual: Activity?, force: Boolean = false): Upd? {
+    fun check(manual: Activity?, force: Boolean = false): Upd? = checkNow(manual, force).second
+
+    /** come [check]; in più se la risposta è arrivata (false = GitHub non raggiungibile: non si sa se c'è una versione nuova) */
+    private fun checkNow(manual: Activity?, force: Boolean): Pair<Boolean, Upd?> {
         val apk = Panel.update()?.optJSONObject("apk")
         val code = apk?.optInt("versionCode", 0) ?: 0
         val url = apk?.optString("url", "") ?: ""
@@ -118,12 +140,12 @@ object Updater {
             staged(u)?.let { ready = it } // già scaricato in un'apertura precedente
             if (ready == null && manual == null && (Store.bgUpdate || force) && (force || !metered()) && prefetchFailed < 3) prefetch(u)
             ui { if (manual != null) prompt(manual, u) else offer(App.top) }
-            return u
+            return true to u
         }
         if (apk != null) { pending = null; ready = null; Store.saveUpd(0, "", ""); try { lock?.dismiss() } catch (_: Exception) {}; lock = null }
         else if (manual == null) lastCheck = SystemClock.elapsedRealtime() - 55 * 60_000L // rete giù: si riprova tra 5 minuti
         if (manual != null) ui { Ui.toast(if (apk == null) "Impossibile controllare gli aggiornamenti adesso" else "Hai già l'ultima versione (${BuildConfig.VERSION_NAME})") }
-        return null
+        return (apk != null) to null
     }
 
     private fun dir(): File = (if (Build.VERSION.SDK_INT >= 24) File(App.I.cacheDir, "apk") else (App.I.externalCacheDir ?: File(App.I.cacheDir, "apk"))).apply { mkdirs() }

@@ -164,6 +164,13 @@ object Store {
     var kickSeen: Long
         get() = p.getLong("kickSeen", 0)
         set(v) = p.edit().putLong("kickSeen", v).apply()
+    /** comandi del pannello già eseguiti, con il loro esito (gli ultimi 30, vedi CmdBook) */
+    val cmdDone: String get() = s("cmdDone")
+    /** [now] = subito sul disco (prima di un riavvio o di una chiusura: porta con sé anche le scritture rimaste in sospeso) */
+    fun saveCmdDone(v: String, now: Boolean = false) {
+        val e = p.edit().putString("cmdDone", v)
+        if (now) e.commit() else e.apply()
+    }
     var vpnUser: Boolean
         get() = p.getBoolean("vpnUser", false)
         set(v) = p.edit().putBoolean("vpnUser", v).apply()

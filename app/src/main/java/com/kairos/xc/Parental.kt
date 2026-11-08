@@ -5,7 +5,8 @@ import android.app.Activity
 /**
  * Controllo genitori: attivo di serie con il PIN 0000. Al primo avvio l'app chiede di scegliere un PIN proprio
  * («Più tardi» rimanda al giorno dopo). Le categorie per adulti chiedono il PIN una volta per apertura dell'app.
- * Il fornitore può riportare il PIN a 0000 dal pannello Kairos Control (comando «Reimposta PIN controllo genitori»).
+ * Il fornitore può riportare il PIN a 0000 dal pannello Kairos Control (comando «Reimposta PIN controllo genitori»), senza avvisi
+ * che lo citino: l'app chiede subito di scegliere un PIN nuovo con la schermata del primo avvio (a lettore chiuso, se si guardava).
  */
 object Parental {
     const val DEFAULT = "0000"
@@ -45,6 +46,9 @@ object Parental {
         Ui.dialog(a, "Controllo genitori", "Il controllo genitori è attivo: le categorie per adulti chiedono un PIN. Ora il PIN è 0000: scegline uno tuo di 4 cifre.\n\nPuoi farlo anche dopo, da Impostazioni.", "Scegli il PIN", "Più tardi") { choose(a) }
     }
 
-    /** comando «Reimposta PIN» dal pannello: si torna a 0000 e l'app richiede di sceglierne uno */
+    /**
+     * Comando «Reimposta PIN» dal pannello: si torna a 0000 (Remote chiede subito il PIN nuovo con [firstRun]; con il rinvio
+     * azzerato, se l'app si chiude prima, lo chiede la Home al prossimo avvio)
+     */
     fun reset() { Store.pin = ""; Store.pinLater = 0L; unlocked = false }
 }

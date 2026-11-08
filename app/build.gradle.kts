@@ -77,4 +77,14 @@ dependencies {
     // 1.0.20250531 = ultima con minSdk 21 (stesso motore wireguard-go della versione successiva)
     implementation("com.wireguard.android:tunnel:1.0.20250531")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
+    // prove JVM (app/src/test): solo per le prove, non finisce nell'APK
+    testImplementation("junit:junit:4.13.2")
+}
+
+// prove JVM nella CI: in caso di errore il registro mostra quale prova e perché
+tasks.withType<Test>().configureEach {
+    testLogging {
+        events("failed")
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+    }
 }

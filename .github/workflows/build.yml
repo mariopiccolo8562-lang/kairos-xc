@@ -54,7 +54,8 @@ jobs:
           echo "VERSION_NAME=$V" >> "$GITHUB_ENV"
           echo "VERSION_CODE=$CODE" >> "$GITHUB_ENV"
 
-      - name: Compila APK
+      # prima le prove JVM (app/src/test: comandi del pannello, conti dello speed test), poi l'APK
+      - name: Prove e compilazione APK
         env:
           KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
@@ -62,7 +63,7 @@ jobs:
           KAIROS_SERVER_URL: ${{ vars.KAIROS_SERVER_URL }}
           XC_APP_NAME: ${{ vars.XC_APP_NAME }}
           XC_APP_ID: ${{ vars.XC_APP_ID }}
-        run: gradle assembleRelease --no-daemon --stacktrace
+        run: gradle testReleaseUnitTest assembleRelease --no-daemon --stacktrace
 
       - run: cp app/build/outputs/apk/release/app-release.apk kairos-xc.apk
 

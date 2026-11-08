@@ -236,6 +236,8 @@ object Panel {
             .put("vis", vis) // presenza: in primo piano o appena andata in sfondo (subito non in linea)
         // diagnostica in «Online ora»: codec, decodifica, blocchi, fotogrammi persi, qualità ridotta
         if (stats != null) b.put("stats", stats)
+        // ultimo speed test chiesto dal pannello (dl, ul, ping, jitter, t), come Kairos Pro: lo si riscrive solo se cambia «t»
+        SpeedTest.beat?.let { b.put("speed", it) }
         if (kickAck > 0) b.put("kickAck", kickAck)
         b.put("cfg", Remote.snapshot()).put("rcv", Store.rcv) // controllo remoto: impostazioni attuali e configurazione applicata
         return try {
@@ -246,10 +248,11 @@ object Panel {
         } catch (_: Exception) { 0 to null }
     }
 
-    /** conferma al pannello di un comando del controllo remoto */
-    fun cmdAck(id: Long, ok: Boolean, info: String) {
-        try { post("/api/player/cmd", auth().put("id", id).put("ok", ok).put("info", info.take(200))) } catch (_: Exception) {}
-    }
+    /** conferma al pannello di un comando del controllo remoto: true = ricevuta */
+    fun cmdAck(id: Long, ok: Boolean, info: String): Boolean = try {
+        val (c, j) = post("/api/player/cmd", auth().put("id", id).put("ok", ok).put("info", info.take(200)), 8_000, 10_000)
+        c in 200..299 && j?.optBoolean("ok", false) == true
+    } catch (_: Exception) { false }
 
     /** limite di visioni contemporanee: null = si può guardare, altrimenti il messaggio */
     fun stream(state: String, title: String): String? {

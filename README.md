@@ -31,9 +31,10 @@ Pacchetto `com.kairos.xc`: si installa **accanto** a Kairos Pro, Kairos TV e Kai
 - **Live TV** con categorie e guida adesso/dopo: primo OK = anteprima nel riquadro, secondo OK = schermo intero (si può spegnere nelle Impostazioni).
 - **Film e Serie TV** come MirkoTeam: categorie a sinistra e locandine a griglia (con Preferiti e «Continua a guardare»), schede, stagioni ed episodi, ricerca, profili (anche bambini).
 - Dal pannello: attivazione e scadenza, portali/playlist, cambio DNS, *Disconnetti*, visioni contemporanee, permessi, profili, collegamento di altre TV, messaggi (MSG), VPN, errori. In *Utenti online* la versione compare come `xc …`.
+- **Controllo remoto → Comandi**: riavvia, svuota cache e riavvia, aggiorna le liste, apri le impostazioni, aggiorna l'app, speed test (Cloudflare: il risultato torna al pannello), permesso per gli aggiornamenti, reimposta PIN, chiudi. Sono invisibili al cliente: nessun avviso che citi il fornitore o il pannello (dopo «Reimposta PIN» l'app chiede subito un PIN nuovo, come al primo avvio); durante la visione liste, permesso, speed test e scelta del PIN aspettano la chiusura del lettore.
 - **Aggiornamenti automatici** dalle release di questo repository.
 
-Non ci sono, di proposito: radio, catch up, multischermo, sveglia, registrazioni, guida TV a griglia, VLC, speed test, anteprima video nella lista canali.
+Non ci sono, di proposito: radio, catch up, multischermo, sveglia, registrazioni, guida TV a griglia, VLC, speed test nei menu (c'è solo quello chiesto dal pannello), anteprima video nella lista canali.
 
 ## Messa in funzione (una volta sola)
 
