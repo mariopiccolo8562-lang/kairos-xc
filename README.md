@@ -34,6 +34,19 @@ Pacchetto `com.kairos.xc`: si installa **accanto** a Kairos Pro, Kairos TV e Kai
 - **Controllo remoto → Comandi**: riavvia, svuota cache e riavvia, aggiorna le liste, apri le impostazioni, aggiorna l'app, speed test (Cloudflare: il risultato torna al pannello), permesso per gli aggiornamenti, reimposta PIN, chiudi. Sono invisibili al cliente: nessun avviso che citi il fornitore o il pannello (dopo «Reimposta PIN» l'app chiede subito un PIN nuovo, come al primo avvio); durante la visione liste, permesso, speed test e scelta del PIN aspettano la chiusura del lettore.
 - **Aggiornamenti automatici** dalle release di questo repository.
 
+## Qualità dell'immagine (versioni dello stesso canale 4K / FHD / HD / SD)
+
+Con la linea buona la qualità non si tocca, **anche sulle chiavette da 1 GB** (regole in `QualityPolicy.kt`, provate in `QualityPolicyTest`):
+
+- **Il canale parte nella versione scelta.** La chiavetta non abbassa la qualità da sola: decide solo che il 4K non serve (le chiavette deboli non lo decodificano; sugli schermi non 4K si parte dal FHD, che sembra uguale). «Qualità video: Massima» tiene il 4K anche sugli schermi 1080p.
+- **La linea abbassa la qualità solo con prove recenti:** blocchi su almeno 2 canali nell'ultima mezz'ora (solo in memoria: dopo mezz'ora senza blocchi la qualità torna piena) oppure banda misurata da meno di 2 ore sotto i 4 Mbps (SD solo sotto i 2,5 Mbps). Prima un giudizio valeva 12 ore e una banda vecchia poteva far partire tutto in SD per sempre.
+- **Discesa anticipata** solo con un calo vero e costante del buffer verso lo stallo (non per un vuoto del Wi-Fi) e solo sul canale in onda. Dopo 3 blocchi in 90 s i canali dei 10 minuti successivi partono un gradino sotto.
+- **Risalita**: dopo 6 minuti senza blocchi si riprova la versione piena per il dispositivo.
+- **Chiavette che non reggono il FHD**: se l'immagine va a scatti (con la decodifica hardware) su 2 canali diversi in 7 giorni, i canali partono in HD per 7 giorni, poi si riprova.
+- **«Massima»**: la linea non abbassa mai la qualità. **«1080p / 720p / 480p»**: tetto anche sulle versioni del canale. **«Qualità adattiva» spenta dal pannello**: nessun cambio automatico.
+- Il dispositivo debole tiene solo i buffer più piccoli (memoria); i flussi HLS a più qualità seguono la linea, non la chiavetta.
+- Anteprima nella lista canali: i canali FHD e 4K in HD se la playlist ce l'ha (prima l'SD).
+
 Non ci sono, di proposito: radio, catch up, multischermo, sveglia, registrazioni, guida TV a griglia, VLC, speed test nei menu (c'è solo quello chiesto dal pannello), anteprima video nella lista canali.
 
 ## Messa in funzione (una volta sola)
