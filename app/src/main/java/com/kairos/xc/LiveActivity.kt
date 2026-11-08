@@ -53,6 +53,8 @@ class LiveActivity : BaseActivity() {
     private var seq = 0
     private var loadedSig = ""
     private var verWas = Sync.ver("live")
+    /** elenco dei canali non funzionanti con cui è stata letta la lista: se il pannello lo cambia, si rilegge al ritorno */
+    private var deadWas = Dead.gen
     /** appena i canali sono ricaricati (film e serie arrivano dopo) si rilegge, restando sul canale selezionato */
     private val syncL: () -> Unit = {
         val v = Sync.ver("live")
@@ -126,6 +128,8 @@ class LiveActivity : BaseActivity() {
         // portale o profilo cambiati mentre si guardava (pannello, Impostazioni): elenco del portale giusto
         // (di ritorno dal lettore resta il canale guardato, già indicato in onActivityResult)
         if (loadedSig.isNotEmpty() && sig() != loadedSig) { if (restoreK.isEmpty()) curRow?.let { restoreK = it.s("k") }; loadCats(refresh = true); return }
+        // canali non funzionanti cambiati (pannello): stesso elenco riletto, restando sul canale selezionato
+        if (deadWas != Dead.gen && loadedSig.isNotEmpty()) { deadWas = Dead.gen; if (restoreK.isEmpty()) curRow?.let { restoreK = it.s("k") }; pendingCat = catAdapter.items.find { it.id == curCat }; loadChannels(); return }
         chAdapter.notifyDataSetChanged()
     }
 
@@ -206,6 +210,7 @@ class LiveActivity : BaseActivity() {
         val favs = Store.favs("live")
         val want = restoreK
         val my = ++seq
+        deadWas = Dead.gen
         bg {
             val cur = Db.live(c.id, pls, kids, favs)
             var at = -1
@@ -434,9 +439,9 @@ class LiveActivity : BaseActivity() {
         stopVideo()
         releaseVideo() // un solo decoder alla volta: l'anteprima si chiude prima dello schermo intero
         Store.setLastLive(id, k)
-        val target = if (Remote.engine("live") == "vlc") VlcActivity::class.java else PlayerActivity::class.java
+        // il lettore scelto dal cliente o dal pannello; con «Automatico» e le funzioni intelligenti, quello imparato per il formato
         @Suppress("DEPRECATION")
-        startActivityForResult(Intent(this, target).putExtra("kind", "live").putExtra("cat", curCat).putExtra("rowId", id), 7)
+        startActivityForResult(Play.liveIntent(this, curRow?.takeIf { it.l("_id") == id }, id, curCat), 7)
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -505,6 +510,13 @@ class LiveActivity : BaseActivity() {
             Ui.img(h.logo, if (App.max) null else logo, size, size) // «Leggerissima»: solo iniziali, niente immagini da scaricare
             val k = c.getString(1) ?: ""
             h.fav.visibility = if (favSet.contains(k)) View.VISIBLE else View.GONE
+            // segnalato dal pannello come non funzionante per nessuno: in fondo alla lista, «non disponibile»
+            if (position >= ((c as? Db.SplitCursor)?.split ?: Int.MAX_VALUE)) {
+                h.now.visibility = View.VISIBLE
+                h.now.text = "non disponibile"
+                h.bar.visibility = View.GONE
+                return
+            }
             val p = K.pl(c.getString(2) ?: "")
             val now = Epg.cached(p, c.getString(7) ?: "", 4)?.firstOrNull()
             if (now != null) {

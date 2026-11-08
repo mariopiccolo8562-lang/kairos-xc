@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- «Per te» (funzioni intelligenti): scintilla, stesso tratto delle altre icone della Home -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="1.8" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M12,3.5 L13.9,10.1 L20.5,12 L13.9,13.9 L12,20.5 L10.1,13.9 L3.5,12 L10.1,10.1 Z" />
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="1.6" android:strokeLineCap="round" android:pathData="M19,3.5 L19,6.5 M17.5,5 L20.5,5" />
+</vector>

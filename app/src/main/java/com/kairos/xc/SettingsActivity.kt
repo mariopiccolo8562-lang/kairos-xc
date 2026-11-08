@@ -121,6 +121,13 @@ class SettingsActivity : BaseActivity() {
         val liteFixed = Remote.imposed("lite") || !K.liteAllowed()
         val liteVal = when (Store.liteMode) { "on" -> "Sempre"; "max" -> "Leggerissima"; "off" -> "Mai"; else -> "Automatica" } + (if (liteFixed) " · fornitore" else "")
         row(R.drawable.ic_bolt, "Modalità leggera", "Per chiavette e TV vecchie: niente animazioni, immagini e memoria ridotte", liteVal) { if (liteFixed) Ui.toast("Impostazione scelta dal tuo fornitore") else chooseLite() }
+        // funzioni intelligenti: promemoria dei programmi e delle squadre che si guardano spesso (spegnibili qui)
+        if (Smart.on()) row(R.drawable.ic_tv, "Promemoria automatici", "Un avviso poco prima dei programmi e delle partite che guardi spesso, con «Guarda»", if (Store.autoRem) "Sì" else "No") {
+            Store.autoRem = !Store.autoRem
+            if (!Store.autoRem) Reminders.clear()
+            Ui.toast(if (Store.autoRem) "Promemoria automatici attivi" else "Promemoria automatici spenti")
+            build()
+        }
         row(R.drawable.ic_shield, "Controllo genitori", "Le categorie per adulti chiedono il PIN", if (Parental.on()) "Attivo" else "Spento") {
             if (Parental.on()) Parental.ask(this, "PIN per disattivare") { Store.parental = false; Parental.unlocked = false; build() }
             else { Store.parental = true; Parental.unlocked = false; build(); if (Parental.pinIsDefault()) Parental.choose(this) { build() } }

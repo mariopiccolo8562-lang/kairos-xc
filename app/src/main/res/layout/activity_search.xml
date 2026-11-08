@@ -30,6 +30,14 @@
             android:textColor="@color/text"
             android:textColorHint="@color/dim"
             android:textSize="@dimen/text_m" />
+        <!-- ricerca a voce: solo con le funzioni intelligenti e se il dispositivo ha il riconoscimento vocale -->
+        <ImageButton
+            android:id="@+id/mic"
+            style="@style/IconBtn"
+            android:layout_marginLeft="10dp"
+            android:contentDescription="Cerca a voce"
+            android:src="@drawable/ic_mic"
+            android:visibility="gone" />
     </LinearLayout>
     <FrameLayout
         android:layout_width="match_parent"

@@ -238,6 +238,11 @@ object Panel {
         if (stats != null) b.put("stats", stats)
         // ultimo speed test chiesto dal pannello (dl, ul, ping, jitter, t), come Kairos Pro: lo si riscrive solo se cambia «t»
         SpeedTest.beat?.let { b.put("speed", it) }
+        // canali non funzionanti, come la Kairos Pro: impronta dell'elenco che l'app ha (dv) e canale in onda (ck, «server|flusso»)
+        Dead.v?.let { b.put("dv", it) }
+        if (w != null && w.ck.isNotEmpty()) b.put("ck", w.ck)
+        // funzioni intelligenti: esito degli auto-controlli (quando cambia e ogni 15 minuti)
+        AutoCheck.toSend()?.let { b.put("chk", it) }
         if (kickAck > 0) b.put("kickAck", kickAck)
         b.put("cfg", Remote.snapshot()).put("rcv", Store.rcv) // controllo remoto: impostazioni attuali e configurazione applicata
         return try {
@@ -247,6 +252,25 @@ object Panel {
             r
         } catch (_: Exception) { 0 to null }
     }
+
+    /** assistente IA (POST /api/player/ai, stesse modalità della Kairos Pro): codice HTTP (0 = pannello non raggiungibile) e risposta */
+    fun ai(body: JSONObject, readMs: Int): Pair<Int, JSONObject?> = try {
+        val b = auth().put("ver", ver)
+        for (k in body.keys()) b.put(k, body.get(k))
+        post("/api/player/ai", b, 8_000, readMs)
+    } catch (_: Exception) { 0 to null }
+
+    /** filmografia di un attore (TMDB, dal pannello, senza IA): null = non raggiungibile */
+    fun person(q: String): JSONObject? = try {
+        val r = Http.text("$base/api/player/person?q=" + Playlist.enc(q) + "&c=" + Playlist.enc(Store.code), connectMs = 8_000, readMs = 12_000)
+        if (r.code == 200) JSONObject(r.text) else null
+    } catch (_: Exception) { null }
+
+    /** domande all'assistente finite: richiesta di altre domande (come «Chiedi altre domande» della Kairos Pro); null = inviata */
+    fun aiMore(): String? = try {
+        val (c, j) = post("/api/player/request", auth().put("ctype", "ai"))
+        if (c in 200..299 && j?.optBoolean("ok") == true) null else j?.optString("error")?.ifEmpty { null } ?: "Richiesta non inviata: riprova tra poco"
+    } catch (_: Exception) { "Richiesta non inviata: riprova tra poco" }
 
     /** conferma al pannello di un comando del controllo remoto: true = ricevuta */
     fun cmdAck(id: Long, ok: Boolean, info: String): Boolean = try {

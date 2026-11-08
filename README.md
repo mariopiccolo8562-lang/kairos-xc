@@ -9,7 +9,7 @@ Pacchetto `com.kairos.xc`: si installa **accanto** a Kairos Pro, Kairos TV e Kai
 
 | | MirkoTeam 7.0 | Kairos XC |
 |---|---|---|
-| Lettori video | 3 (VLC, FFmpeg, ExoPlayer) | 1 (ExoPlayer) |
+| Lettori video | 3 (VLC, FFmpeg, ExoPlayer) | 2 (ExoPlayer, VLC come riserva) |
 | VPN | OpenVPN (librerie native pesanti) | WireGuard dal pannello |
 | Dimensione APK | ~97 MB | circa 4-5 MB |
 | Avvio | attese fisse di 2-5 secondi | nessuna attesa: logo immediato, Home già pronta |
@@ -34,7 +34,34 @@ Pacchetto `com.kairos.xc`: si installa **accanto** a Kairos Pro, Kairos TV e Kai
 - **Controllo remoto → Comandi**: riavvia, svuota cache e riavvia, aggiorna le liste, apri le impostazioni, aggiorna l'app, speed test (Cloudflare: il risultato torna al pannello), permesso per gli aggiornamenti, reimposta PIN, chiudi. Sono invisibili al cliente: nessun avviso che citi il fornitore o il pannello (dopo «Reimposta PIN» l'app chiede subito un PIN nuovo, come al primo avvio); durante la visione liste, permesso, speed test e scelta del PIN aspettano la chiusura del lettore.
 - **Aggiornamenti automatici** dalle release di questo repository.
 
-Non ci sono, di proposito: radio, catch up, multischermo, sveglia, registrazioni, guida TV a griglia, VLC, speed test nei menu (c'è solo quello chiesto dal pannello), anteprima video nella lista canali.
+Non ci sono, di proposito: radio, catch up, multischermo, sveglia, registrazioni, guida TV a griglia, speed test nei menu (c'è solo quello chiesto dal pannello), anteprima video nella lista canali.
+
+## Funzioni intelligenti (dal pannello)
+
+Le funzioni «intelligenti» della Kairos Pro, in versione leggera per le chiavette da 1 GB (Fire TV Stick, Lite). Si accendono dal pannello: **Controllo remoto › Kairos XC › «Funzioni intelligenti»: Accese | Spente**, nel profilo (tutti i clienti XC) o per il singolo cliente (vince sul profilo). **Spente di serie.**
+
+| Funzione | Cosa vede il cliente | Cosa vede il titolare |
+|---|---|---|
+| **Decoder del dispositivo** (sempre attivo) | il canale parte nella versione che il dispositivo regge: 4K su TV o decoder che non lo reggono → FHD, HEVC senza decoder HEVC → H.264 (anche 10 bit e 50/60 fps), fra le versioni dello stesso canale che XC già conosce; con «Qualità video: Massima» (o una qualità scelta) resta quella | «Dati» › Auto-controlli › *Decodifica del dispositivo* |
+| **Canali non funzionanti** (sempre attivo) | il canale va **in fondo** alla lista e allo zapping con «non disponibile»; torna al suo posto quando il pannello lo toglie | *Errori delle app › «Canali non funzionanti»* (stesso contratto della Pro: `ck` negli errori, anche da VLC; `dv`, `ck` e `dead` nel battito) |
+| **Lettore imparato** | con «Automatico» parte da sé con VLC sui formati (TS, HLS, MP4, MKV, varianti HEVC) dove ExoPlayer su quel dispositivo fallisce e VLC va; se VLC comincia a fallire si torna a ExoPlayer. Mai contro il lettore scelto dal cliente o dal pannello; si azzera a ogni versione dell'app | «Dati» › *Lettore imparato* (es. «TS → VLC») |
+| **Auto-controlli** | niente, salvo «Abbonamento da rinnovare» (linea scaduta o sospesa, al più una volta al giorno) e l'orologio sbagliato (ogni 3 giorni). Mai «fornitore» | «Salute delle app» e «Dati» › Auto-controlli: server (anche passaggio da solo al **server di riserva**), linea (scaduta, sospesa, connessioni piene, giorni alla scadenza), guida, spazio (sotto 300 MB pulisce le cache delle immagini), orologio, lettore imparato, decodifica |
+| **Cambio canale** | zapping un po' più rapido sui canali con server diversi: si risolve in anticipo il DNS del canale più probabile (verso dello zapping o sequenza imparata). Niente secondo lettore | — |
+| **Promemoria** | «🔔 Tra poco» 10 minuti prima dei programmi visti in almeno 2 giorni diversi e 15 minuti prima delle partite delle squadre seguite, con **«Guarda»**, «Ignora», «Non avvisarmi più»; si spengono da *Impostazioni › Promemoria automatici* | — |
+| **«Per te»** | pulsante PER TE in basso nella Home: canali guardati di solito a quell'ora (feriali, sabato e domenica separati), serie da riprendere, novità delle categorie viste in quella fascia | — |
+| **«Stasera»** | pulsante STASERA in basso nella Home (anche in *Cerca*): da 3 a 5 proposte con il perché (serie da riprendere, film e serie delle categorie che guarda, novità, prima serata dei suoi canali); le sceglie l'assistente, senza assistente l'app | — |
+| **Assistente IA** | in *Cerca*: «✦ Cerca con l'assistente» per le frasi («film d'azione anni 90», «la partita dell'Inter stasera»), domande libere («chi è l'attore di Rambo?»), risultati apribili dalla libreria e dalla TV; messaggi semplici («Per oggi le domande all'assistente sono finite: riprendono domani») e «Chiedi altre domande» | il motore come per la Pro: scheda del cliente (Gemini di serie, Claude per cliente), profilo Kairos XC › «Assistente IA», pagina Assistente IA; stesse domande al giorno |
+| **Ricerca a voce** | 🎤 accanto al campo di *Cerca*, solo se il dispositivo ha il riconoscimento vocale (Android TV e Google TV di solito sì, Fire TV no); in italiano, permesso del microfono chiesto al primo uso | — |
+
+**Budget di leggerezza** (`Budget` in `SmartLogic.kt`, provato dai test JVM):
+- **zero lavoro nuovo** nel percorso d'avvio fino alla Home: il file delle funzioni (`smart`, separato dalle impostazioni) si apre la prima volta **dopo 60 s**; i pulsanti PER TE e STASERA si caricano (ViewStub) solo se le funzioni sono accese e dopo il primo disegno della Home;
+- il lavoro in sottofondo parte **solo nei menu**, mai durante la visione (né con l'anteprima nella lista canali), **uno alla volta** su un thread a **priorità minima**; nel lettore solo conti in memoria (e una risoluzione DNS dopo il cambio canale);
+- **nessuna lista in memoria**: archivio SQLite con LIMIT; i canali non funzionanti in fondo con due letture nell'ordine dell'indice (niente riordino); la guida per promemoria e «Stasera» è una **guida piccola** (`smart.db`) con i soli canali che si guardano di più (8, sulle chiavette 4), una dozzina di programmi ciascuno dalla guida breve del server;
+- abitudini e promemoria **per profilo**, con un tetto di **200 voci** (canali 50, categorie 25, programmi 50, squadre 30, promemoria 30, «non avvisarmi più» 15); lettore imparato 12 formati; zapping 100 canali;
+- **nessuna libreria nuova**;
+- sulle chiavette deboli (classe D): auto-controlli ogni **60 minuti** invece di 30, guida piccola di 4 canali (2 per giro), nessuna funzione più frequente che altrove, immagini delle pagine «Per te» e «Stasera» piccole come il resto dell'app (36 dp; con «Leggerissima» niente loghi).
+
+**Spente** (di serie): Kairos XC fa quello che faceva prima e non esegue il lavoro nuovo in sottofondo. Restano solo le due parti che non costano nulla e correggono soltanto: i **decoder** letti una volta (dopo 60 s, nei menu) con la versione giusta del canale, e i **canali non funzionanti** in fondo alla lista (con il `ck` negli errori e l'impronta `dv` nel battito).
 
 ## Messa in funzione (una volta sola)
 
@@ -59,7 +86,8 @@ Per ora l'app si presenta al pannello come Kairos TV (stesse funzioni) e si dist
 
 | Cartella | Cosa contiene |
 |---|---|
-| `app/src/main/java/com/kairos/xc/` | `HomeActivity` (Home a cerchi, portali), `VodActivity` (Film/Serie a griglia), `LiveActivity`, `DetailActivity`, `PlayerActivity`, `Sync`/`Db` (liste su disco, per portale), `Panel` (pannello Kairos) |
+| `app/src/main/java/com/kairos/xc/` | `HomeActivity` (Home a cerchi, portali), `VodActivity` (Film/Serie a griglia), `LiveActivity`, `DetailActivity`, `PlayerActivity`, `Sync`/`Db` (liste su disco, per portale), `Panel` (pannello Kairos); funzioni intelligenti: `Smart` (interruttore, lavoro in sottofondo, decoder, lettore imparato, canali non funzionanti, zapping, abitudini, promemoria), `AutoCheck`, `Guide` (guida piccola), `Ai` e `SmartActivity` («Per te», «Stasera»), logica senza Android in `SmartLogic`, `Habits`, `AiFind` |
+| `app/src/test/` | prove JVM (comandi del pannello, speed test, budget di leggerezza e tetti, decoder e versione, lettore imparato e scelta del lettore, canali, abitudini e promemoria, criteri di ricerca) |
 | `app/src/main/res/` | Grafica: colori, layout, logo |
 | `app/src/main/baseline-prof.txt` | Profilo di avvio |
 | `docs/` | Logo e banner (SVG e PNG), `src/grafica.py` (sfondi e cerchi 3D) e `src/pulsanti.py` (pulsanti in rilievo) |

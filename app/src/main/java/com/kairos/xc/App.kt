@@ -80,6 +80,8 @@ class App : Application() {
 
     companion object {
         lateinit var I: App
+        /** avvio del processo (orologio monotono): il lavoro in sottofondo delle funzioni intelligenti aspetta almeno 60 s */
+        val bootAt: Long = android.os.SystemClock.elapsedRealtime()
         fun isPlayer(a: Activity?): Boolean = a is PlayerActivity || a is VlcActivity
         @Volatile var lite = false
         /** «Leggerissima»: per le chiavette più vecchie (liste senza loghi, immagini più piccole, canali in HD) */

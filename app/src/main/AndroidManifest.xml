@@ -7,6 +7,9 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <!-- aggiornamento automatico dell'app -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- ricerca a voce (funzioni intelligenti): il permesso si chiede solo al primo uso; il microfono non è obbligatorio -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
     <!-- TV (Fire TV, Android TV, Google TV) e telefoni/tablet -->
     <uses-feature android:name="android.software.leanback" android:required="false" />
@@ -53,6 +56,9 @@
             android:windowSoftInputMode="adjustNothing|stateHidden"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode" />
         <activity android:name=".SettingsActivity" android:exported="false" android:screenOrientation="sensorLandscape"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode" />
+        <!-- «Per te» e «Stasera» (funzioni intelligenti) -->
+        <activity android:name=".SmartActivity" android:exported="false" android:screenOrientation="sensorLandscape"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode" />
         <activity
             android:name=".PlayerActivity"

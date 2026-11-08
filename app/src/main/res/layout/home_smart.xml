@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Home: «Per te» e «Stasera» (funzioni intelligenti), due pulsanti discreti accanto ad Account e Favorite.
+     Si caricano solo con le funzioni intelligenti accese e dopo il primo disegno della Home (ViewStub): l'apertura resta istantanea -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal">
+    <LinearLayout android:id="@+id/foryou" style="@style/HomeTile" android:contentDescription="PER TE">
+        <ImageView style="@style/HomeTileIcon" android:src="@drawable/hi_foryou" />
+        <TextView style="@style/HomeTileLabel" android:text="PER TE" />
+    </LinearLayout>
+    <LinearLayout android:id="@+id/tonight" style="@style/HomeTile" android:contentDescription="STASERA">
+        <ImageView style="@style/HomeTileIcon" android:src="@drawable/hi_tonight" />
+        <TextView style="@style/HomeTileLabel" android:text="STASERA" />
+    </LinearLayout>
+</LinearLayout>
