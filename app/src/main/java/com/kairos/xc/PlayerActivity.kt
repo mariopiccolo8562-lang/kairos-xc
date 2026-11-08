@@ -153,6 +153,11 @@ class PlayerActivity : BaseActivity() {
     private var lastRendered = -1
     private var lastPos = -1L
     private var frozen = 0
+    /** immagine «a scatti» con l'audio che va: fotogrammi mostrati e buttati nell'ultimo secondo (decoder che non ce la fa) */
+    private var slowSec = 0
+    private var slN = -1L
+    private var slD = -1L
+    private var slT = 0L
     private var lastStallAt = 0L
     private var lastFrameAt = 0L
     private var lastKind = ""
@@ -287,6 +292,7 @@ class PlayerActivity : BaseActivity() {
             updateTime()
             checkStall()
             checkFreeze()
+            checkSlow()
             checkResolved()
             checkReduced()
             checkDrain()
@@ -666,6 +672,29 @@ class PlayerActivity : BaseActivity() {
         }
     }
 
+    /**
+     * immagine «a scatti» con l'audio che va (checkFreeze vede solo lo zero assoluto): per 6 s di fila meno del 35% dei
+     * fotogrammi del canale, oppure più fotogrammi buttati che mostrati → stessa scala dell'immagine ferma
+     */
+    private fun checkSlow() {
+        val p = player ?: return
+        val f = p.videoFormat
+        val now = mono()
+        if (p.playbackState != Player.STATE_READY || !p.playWhenReady || f == null || !firstReady || cushioning || seeking ||
+            playStartAt == 0L || now - playStartAt < 10_000L || (f.frameRate > 0f && f.frameRate <= 5f)) { slowSec = 0; slN = -1L; return }
+        val c = p.videoDecoderCounters ?: return
+        c.ensureUpdated()
+        val fr = c.renderedOutputBufferCount.toLong(); val dr = c.droppedBufferCount.toLong()
+        if (slN >= 0 && fr >= slN && dr >= slD && now - slT >= 500L) {
+            val secs = (now - slT) / 1000f
+            val shown = (fr - slN) / secs; val lost = (dr - slD) / secs; val want = f.frameRate
+            val slow = shown > 0f && ((want >= 10f && shown < want * 0.35f) || (lost >= 5f && lost > shown))
+            if (slow) slowSec++ else slowSec = 0
+        }
+        slN = fr; slD = dr; slT = now
+        if (slowSec >= 6) { slowSec = 0; slN = -1L; recover("freeze", "immagine a scatti") }
+    }
+
     private fun checkDrain() {
         val p = player ?: return
         val now = mono()
@@ -765,7 +794,7 @@ class PlayerActivity : BaseActivity() {
         // canale partito già ridotto per la connessione e che si blocca ancora: dritto alla versione ancora più leggera
         if (fresh && kind == "stall" && reduced && reducedByLine && switchLighter(byLine = true)) { lastAction = "versione più leggera"; fixAt = now; return }
         val ladder = if (live) when (problem) {
-            "freeze" -> listOf("reload", "soft", "alt", "lighter")
+            "freeze" -> if (Adaptive.device() == "D" || problemErr == "immagine a scatti") listOf("reload", "lighter", "alt", "soft") else listOf("reload", "soft", "alt", "lighter")
             "stall" -> if (longStall) listOf("reload", "server", "alt", "lighter") else listOf("lighter", "alt", "cushion")
             else -> listOf("reload", "server", "alt", "soft", "lighter")
         } else when (problem) {
@@ -810,7 +839,8 @@ class PlayerActivity : BaseActivity() {
             true
         }
         // decodifica software solo per immagine ferma o errori del decoder, mai per problemi di rete
-        "soft" -> if (soft || (problem == "error" && !decoderProblem)) false else {
+        // sulle chiavette da 1 GB la CPU non decodifica in software oltre la SD: l'immagine resterebbe quasi ferma con l'audio
+        "soft" -> if (soft || (problem == "error" && !decoderProblem) || (Adaptive.device() == "D" && (player?.videoFormat?.height ?: 0).let { it == 0 || it > 576 })) false else {
             lastAction = "decodifica software"
             notice("Provo la decodifica software…")
             setSoft(true, if (live) null else player?.currentPosition, restart = true)
