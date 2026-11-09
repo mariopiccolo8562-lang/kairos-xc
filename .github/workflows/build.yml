@@ -61,7 +61,7 @@ jobs:
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
           KAIROS_SERVER_URL: ${{ vars.KAIROS_SERVER_URL }}
-          KAIROS_DL_BASE: ${{ vars.KAIROS_DL_BASE }}   # indirizzo dei download (predefinito https://panel-kairos.com)
+          KAIROS_DL_BASE: ${{ vars.KAIROS_DL_BASE }}   # indirizzo dei download (predefinito https://store-k.download)
           XC_APP_NAME: ${{ vars.XC_APP_NAME }}
           XC_APP_ID: ${{ vars.XC_APP_ID }}
         run: gradle testReleaseUnitTest assembleRelease --no-daemon --stacktrace
