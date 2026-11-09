@@ -21,7 +21,8 @@ import kotlin.system.exitProcess
 /**
  * Controllo remoto dal pannello Kairos Control.
  * - Impostazioni imposte (rc): arrivano con l'apertura (register) e con ogni battito; vincono su quelle scelte
- *   nell'app, che le mostra come «scelte dal fornitore». Oggi: modalità leggera, anteprima canali, aggiornamento in background.
+ *   nell'app, che le mostra come «scelte dal fornitore». Oggi: modalità leggera, anteprima canali, aggiornamento in background,
+ *   riquadro della qualità nel lettore (vedi [QBox]).
  * - Comandi (cmds): riavvia, svuota cache e riavvia, aggiorna liste, apri impostazioni, aggiorna l'app, speed test, permesso
  *   per gli aggiornamenti, reimposta PIN, chiudi. L'app li esegue e li conferma al pannello (POST /api/player/cmd); il pannello
  *   li rimanda a ogni battito finché non arriva la conferma: doppioni, attese e comandi già eseguiti li tiene [CmdBook].
@@ -62,6 +63,8 @@ object Remote {
     val forceDays: Int? get() = when (str("force")) { "now" -> 0; "3d" -> 3; "7d" -> 7; else -> null }
     /** finestra «Privacy e condizioni»: skip = il fornitore ha deciso di non mostrarla */
     val privacy: String? get() = str("privacy")?.takeIf { it == "show" || it == "skip" }
+    /** riquadro della qualità nel lettore (voce «qbox»): off = mai, noq = senza la sigla, full = come sempre (vedi [QBox]) */
+    val qbox: String get() = QBox.mode(str("qbox"))
     fun imposed(k: String): Boolean = str(k) != null
     fun value(k: String): String? {
         val values = playerValues[k] ?: return null

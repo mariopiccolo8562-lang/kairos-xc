@@ -234,7 +234,7 @@ class PlayerActivity : BaseActivity() {
     private lateinit var notice: TextView
     private val noticeR = Runnable { notice.visibility = View.GONE }
 
-    // risoluzione e FPS in alto a destra (permesso «resInd» del cliente): solo per i canali in diretta
+    // risoluzione e FPS in alto a destra (permesso «resInd» del cliente e voce «qbox» del pannello, vedi QBox): solo per i canali in diretta
     private lateinit var res: TextView
     /** altezza del video del flusso in corso (0 = non ancora nota): se cambia, è cambiata la risoluzione (qualità adattiva) */
     private var resH = 0
@@ -1038,17 +1038,16 @@ class PlayerActivity : BaseActivity() {
         App.main.postDelayed(noticeR, ms)
     }
 
-    /* ---------------- risoluzione e FPS (permesso «resInd») ---------------- */
-    /** solo i canali in diretta; permesso spento dal pannello = mai (chiave assente = consentito) */
-    private fun resOn(): Boolean = live && Panel.state?.perm("resInd") != false
+    /* ---------------- risoluzione e FPS (permesso «resInd» e voce «qbox» del pannello) ---------------- */
+    /** solo i canali in diretta; permesso spento dal pannello (chiave assente = consentito) o voce «qbox» "off" = mai (vedi [QBox]) */
+    private fun resOn(): Boolean = live && QBox.shown(Panel.state?.perm("resInd") != false, Remote.qbox)
 
-    /** es. «FHD · 1080p · 50 fps»; gli fps si omettono finché non si conoscono (né dal formato né dalla misura) */
+    /** es. «FHD · 1080p · 50 fps» (con la voce «qbox» "noq" «1080p · 50 fps»); gli fps si omettono finché non si conoscono (né dal formato né dalla misura) */
     private fun resText(): String {
         val h = resH
         if (h <= 0) return ""
-        val q = when { h >= 2000 -> "4K"; h >= 1000 -> "FHD"; h >= 700 -> "HD"; else -> "SD" }
         val fps = fpsShown()
-        return "$q · ${h}p" + (if (fps > 0) " · $fps fps" else "")
+        return QBox.text(QBox.tag(h), h, if (fps > 0) "$fps" else "", Remote.qbox)
     }
 
     /** fps da mostrare: quelli del formato video, altrimenti quelli misurati dal decoder (0 = non ancora noti) */
