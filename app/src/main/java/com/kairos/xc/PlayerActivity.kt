@@ -555,7 +555,7 @@ class PlayerActivity : BaseActivity() {
         override fun onVideoSizeChanged(videoSize: VideoSize) {
             val h = videoSize.height
             val q = when { h >= 2000 -> "4K"; h >= 1000 -> "FHD"; h >= 700 -> "HD"; h > 0 -> "SD"; else -> "" }
-            badge.text = if (live) (if (q.isEmpty()) "LIVE" else "$q · LIVE") else q
+            badge.text = QBox.badge(q, live, Remote.qbox) // voce «qbox» del pannello: con «Senza sigla» o «Nascosto» niente FHD/HD
             badge.visibility = if (badge.text.isEmpty()) View.GONE else View.VISIBLE
             if (live && h > 0) {
                 // risoluzione cambiata a visione partita (qualità adattiva): di nuovo per qualche secondo
