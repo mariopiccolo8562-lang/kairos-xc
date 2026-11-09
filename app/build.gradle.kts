@@ -7,8 +7,12 @@ fun env(name: String): String? = System.getenv(name)?.takeIf { it.isNotBlank() }
 val keystore = env("KS_PATH")?.let { file(it) }?.takeIf { it.exists() }
 // pannello Kairos (lo stesso di KAIROS TV); la variabile KAIROS_SERVER_URL del repository, se c'è, lo sostituisce
 val serverUrl = (env("KAIROS_SERVER_URL") ?: "https://kairos-panel.mariopiccolo8562.workers.dev").trimEnd('/').replace("\"", "")
-// aggiornamenti: direttamente dalle release di questo repository (Kairos XC è separata dalle altre app Kairos)
-val updateUrl = "https://github.com/" + (env("GITHUB_REPOSITORY") ?: "mariopiccolo8562-lang/kairos-xc") + "/releases/latest/download/kairos-xc.json"
+// download e aggiornamenti: un solo indirizzo (oggi il pannello), da cambiare quando arriva il dominio dedicato ai download;
+// l'app chiede <DL_BASE>/get/xc.json, poi panel-kairos.com (vedi UpdFeed.kt); la variabile KAIROS_DL_BASE, se c'è, lo sostituisce
+val dlBase = (env("KAIROS_DL_BASE") ?: "https://panel-kairos.com").trimEnd('/').replace("\"", "")
+// riserva degli aggiornamenti, solo se il pannello non risponde: kairos-xc.json dell'ultima release di questo repository
+// (Kairos XC è separata dalle altre app Kairos); con il repository privato fallisce senza danni
+val updateFallback = "https://github.com/" + (env("GITHUB_REPOSITORY") ?: "mariopiccolo8562-lang/kairos-xc") + "/releases/latest/download/kairos-xc.json"
 
 android {
     namespace = "com.kairos.xc"
@@ -24,7 +28,8 @@ android {
         versionName = env("VERSION_NAME") ?: "1.0.1"
         resValue("string", "app_name", env("XC_APP_NAME") ?: "Kairos XC")
         buildConfigField("String", "SERVER_URL", "\"$serverUrl\"")
-        buildConfigField("String", "UPDATE_URL", "\"$updateUrl\"")
+        buildConfigField("String", "DL_BASE", "\"$dlBase\"")
+        buildConfigField("String", "UPDATE_URL_FALLBACK", "\"$updateFallback\"")
         // Fire TV / Android TV / telefoni sono ARM: niente x86, APK più piccolo
         ndk { abiFilters += listOf("armeabi-v7a", "arm64-v8a") }
         // testi dell'app solo in italiano (sono nel codice): delle librerie restano le risorse predefinite e quelle italiane,

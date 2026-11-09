@@ -23,7 +23,8 @@ import java.security.MessageDigest
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * Aggiornamento automatico dalle release di GitHub (kairos-xc.json).
+ * Aggiornamento automatico: file degli aggiornamenti dal pannello (/get/xc.json; riserva kairos-xc.json delle release di
+ * GitHub, vedi [UpdFeed]) e APK dal link che c'è dentro.
  * Si controlla a ogni apertura dell'app (al massimo ogni 10 minuti) e ogni ora mentre resta aperta.
  * Aggiornamento in background (scelta del cliente o imposta dal pannello, acceso di serie): la versione nuova
  * si scarica e si verifica in silenzio (solo su Wi-Fi o cavo, mai durante la visione); quando è pronta l'app
@@ -94,7 +95,7 @@ object Updater {
     /**
      * Il pannello chiede l'aggiornamento (upd nel battito o comando «update»): controllo subito, scaricamento in background e
      * proposta. [done] riceve l'esito per la conferma del comando: false = controllo non riuscito (prima, senza rete o con
-     * GitHub irraggiungibile, la conferma diceva «già aggiornata»).
+     * pannello e GitHub irraggiungibili, la conferma diceva «già aggiornata»).
      */
     fun fromPanel(done: ((Boolean, String) -> Unit)? = null) {
         if (!checking.compareAndSet(false, true)) { done?.invoke(true, "controllo già in corso"); return }
@@ -112,7 +113,7 @@ object Updater {
                         else -> ": proposta al cliente"
                     }
                     reached -> "già aggiornata (" + BuildConfig.VERSION_NAME + ")"
-                    else -> { ok = false; "controllo non riuscito: GitHub non raggiungibile dal dispositivo" }
+                    else -> { ok = false; "controllo non riuscito: pannello e GitHub non raggiungibili dal dispositivo" }
                 }
             } catch (t: Throwable) {
                 ok = false
@@ -125,7 +126,7 @@ object Updater {
     /** [manual] = schermata da cui l'utente ha chiesto il controllo (riceve anche «nessun aggiornamento»); [force] = anche su rete a consumo */
     fun check(manual: Activity?, force: Boolean = false): Upd? = checkNow(manual, force).second
 
-    /** come [check]; in più se la risposta è arrivata (false = GitHub non raggiungibile: non si sa se c'è una versione nuova) */
+    /** come [check]; in più se la risposta è arrivata (false = pannello e GitHub non raggiungibili: non si sa se c'è una versione nuova) */
     private fun checkNow(manual: Activity?, force: Boolean): Pair<Boolean, Upd?> {
         val apk = Panel.update()?.optJSONObject("apk")
         val code = apk?.optInt("versionCode", 0) ?: 0

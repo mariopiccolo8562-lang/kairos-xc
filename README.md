@@ -63,7 +63,7 @@ Riconoscimento in `AdultFilter.kt` (normalizzazione NFKD e le espressioni del co
 1. Crea su GitHub il repository **`kairos-xc`** (pubblico, altrimenti Downloader e l'aggiornamento automatico non scaricano l'APK) e carica questi file.
 2. **Chiave di firma**: in *Settings → Secrets and variables → Actions* crea `ANDROID_KEYSTORE_B64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_PASSWORD`, `ANDROID_KEY_ALIAS`. Puoi riusare gli stessi valori di Kairos TV, oppure crearne di nuovi con *Actions → Prepara segreti → Run workflow*.
    > ⚠️ Se perdi la chiave di firma non potrai più aggiornare l'app sui dispositivi dei clienti.
-3. Facoltativo, in *Variables*: `XC_APP_NAME` (nome sotto l'icona, predefinito «Kairos XC»), `KAIROS_SERVER_URL` (indirizzo del pannello).
+3. Facoltativo, in *Variables*: `XC_APP_NAME` (nome sotto l'icona, predefinito «Kairos XC»), `KAIROS_SERVER_URL` (indirizzo del pannello), `KAIROS_DL_BASE` (indirizzo dei download e degli aggiornamenti; predefinito `https://panel-kairos.com`).
 
 ## Pubblicare una versione
 
@@ -71,7 +71,7 @@ Riconoscimento in `AdultFilter.kt` (normalizzazione NFKD e le espressioni del co
 
 - Link fisso per **Downloader** e per lo store:
   `https://github.com/mariopiccolo8562-lang/kairos-xc/releases/latest/download/kairos-xc.apk`
-- Le app installate leggono `kairos-xc.json` dell'ultima release e propongono l'aggiornamento da sole.
+- Le app installate chiedono gli aggiornamenti al pannello, `https://panel-kairos.com/get/xc.json` (indirizzo dei download `DL_BASE` in `app/build.gradle.kts`, variabile `KAIROS_DL_BASE`), scaricano l'APK dal link che c'è dentro e propongono l'aggiornamento da sole; solo se il pannello non risponde leggono `kairos-xc.json` dell'ultima release (riserva finché il repository è pubblico).
 
 ## Pannello
 
