@@ -23,8 +23,8 @@ import java.security.MessageDigest
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * Aggiornamento automatico: file degli aggiornamenti da store-k.download o dal pannello (/get/xc.json; riserva
- * kairos-xc.json delle release di GitHub, vedi [UpdFeed]) e APK dal link che c'è dentro, poi dalle basi successive.
+ * Aggiornamento automatico: file degli aggiornamenti da store-k.download (/get/xc.json) o dai domini di riserva,
+ * niente pannello né GitHub (vedi [UpdFeed]); APK dal link che c'è dentro, poi dalle altre basi.
  * Si controlla a ogni apertura dell'app (al massimo ogni 10 minuti) e ogni ora mentre resta aperta.
  * Aggiornamento in background (scelta del cliente o imposta dal pannello, acceso di serie): la versione nuova
  * si scarica e si verifica in silenzio (solo su Wi-Fi o cavo, mai durante la visione); quando è pronta l'app
@@ -95,7 +95,7 @@ object Updater {
     /**
      * Il pannello chiede l'aggiornamento (upd nel battito o comando «update»): controllo subito, scaricamento in background e
      * proposta. [done] riceve l'esito per la conferma del comando: false = controllo non riuscito (prima, senza rete o con
-     * pannello e GitHub irraggiungibili, la conferma diceva «già aggiornata»).
+     * dominio dei download e riserve irraggiungibili, la conferma diceva «già aggiornata»).
      */
     fun fromPanel(done: ((Boolean, String) -> Unit)? = null) {
         if (!checking.compareAndSet(false, true)) { done?.invoke(true, "controllo già in corso"); return }
@@ -113,7 +113,7 @@ object Updater {
                         else -> ": proposta al cliente"
                     }
                     reached -> "già aggiornata (" + BuildConfig.VERSION_NAME + ")"
-                    else -> { ok = false; "controllo non riuscito: pannello e GitHub non raggiungibili dal dispositivo" }
+                    else -> { ok = false; "controllo non riuscito: il dominio dei download non è raggiungibile dal dispositivo" }
                 }
             } catch (t: Throwable) {
                 ok = false
@@ -126,7 +126,7 @@ object Updater {
     /** [manual] = schermata da cui l'utente ha chiesto il controllo (riceve anche «nessun aggiornamento»); [force] = anche su rete a consumo */
     fun check(manual: Activity?, force: Boolean = false): Upd? = checkNow(manual, force).second
 
-    /** come [check]; in più se la risposta è arrivata (false = pannello e GitHub non raggiungibili: non si sa se c'è una versione nuova) */
+    /** come [check]; in più se la risposta è arrivata (false = dominio dei download e riserve non raggiungibili: non si sa se c'è una versione nuova) */
     private fun checkNow(manual: Activity?, force: Boolean): Pair<Boolean, Upd?> {
         val apk = Panel.update()?.optJSONObject("apk")
         val code = apk?.optInt("versionCode", 0) ?: 0
@@ -203,12 +203,12 @@ object Updater {
 
     /**
      * scarica l'APK del link [url] del file degli aggiornamenti in [out] e lo verifica; se non riesce (rete, errore HTTP,
-     * file sbagliato) lo stesso APK dalle basi successive (/get/xc.apk) e alla fine dall'ultima release di GitHub, vedi
+     * file sbagliato) lo stesso APK dalle altre basi dei download (/get/xc.apk), vedi
      * [UpdFeed.apkUrls]. [progress] riceve 0-99; [pause] = vero se bisogna interrompere (visione iniziata): non è un errore,
      * si riprova più tardi senza passare alle altre basi.
      */
     private fun fetch(url: String, out: File, progress: ((Int) -> Unit)?, pause: (() -> Boolean)? = null) =
-        UpdFeed.firstOk(UpdFeed.apkUrls(url, BuildConfig.DL_BASE, "xc", BuildConfig.APK_URL_FALLBACK), { it is Paused }) {
+        UpdFeed.firstOk(UpdFeed.apkUrls(url, BuildConfig.DL_BASE, "xc", Panel.dlExtra()), { it is Paused }) {
             if (pause?.invoke() == true) throw Paused() // visione iniziata: nessun altro tentativo adesso
             fetchOne(it, out, progress, pause)
         }
