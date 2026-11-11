@@ -71,6 +71,7 @@ object Pulse {
             watching = null
             fgDue = false
             if (!left) gone()
+            Updater.onBackground()
         }
     }
 
