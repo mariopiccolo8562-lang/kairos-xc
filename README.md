@@ -77,7 +77,9 @@ Il permesso «resInd» bloccato lo nasconde sempre. Non cambiano i nomi dei cana
 
 ## Pubblicare una versione
 
-*Releases → Draft a new release* → tag `v1.0.0` (poi `v1.0.1`, `v1.1.0`…) → *Publish*. Dopo pochi minuti alla release sono allegati `kairos-xc.apk` e `kairos-xc.json`.
+**Da sola:** cambia il numero in `versione.txt` su `main` (per esempio da `3.4.4` a `3.4.5`). La compilazione di quella modifica crea il tag `v3.4.5` e pubblica la release, senza passare da GitHub. La regola sta in `.github/scripts/versione.sh` (provata a ogni compilazione da `versione_test.sh`): pubblica solo da `main` e solo se la versione è nuova e più alta dell'ultima pubblicata; con un numero non valido, più basso o già pubblicato esce solo l'APK di prova. Le altre modifiche a `main` non pubblicano nulla.
+
+**A mano, come prima:** *Releases → Draft a new release* → tag `v1.0.0` (poi `v1.0.1`, `v1.1.0`…) → *Publish*. Dopo pochi minuti alla release sono allegati `kairos-xc.apk` e `kairos-xc.json`.
 
 - Link fisso per **Downloader** e per lo store:
   `https://github.com/mariopiccolo8562-lang/kairos-xc/releases/latest/download/kairos-xc.apk`
