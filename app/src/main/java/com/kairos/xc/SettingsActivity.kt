@@ -82,6 +82,10 @@ class SettingsActivity : BaseActivity() {
             val subtitle = if (serverName.isNotEmpty()) "${cur?.name} · $serverName ($modeName)" else cur?.name.orEmpty()
             row(R.drawable.ic_layers, "Portale", "Scegli il server da usare", subtitle) { choosePl() }
         }
+        // DNS cifrato: lo decide il fornitore dal pannello; qui si vede lo stato e, se non è partito, si riprova
+        if (Remote.sdns) row(R.drawable.ic_shield, "DNS cifrato", "Scelto dal tuo fornitore", if (KxVpn.state == "on") "Protetto dalla VPN" else DnsShield.message) {
+            if (DnsShield.state != "on" && KxVpn.state != "on") { DnsShield.retry(); Vpns.apply(this); App.main.postDelayed({ if (!isFinishing) build() }, 1500) }
+        }
         if (s.vpnMode != "off" && s.vpnConf.isNotEmpty()) {
             if (s.vpnMode == "force") row(R.drawable.ic_shield, "VPN", KxVpn.message.ifEmpty { "Attivata dal tuo fornitore" }, "Sempre attiva") {
                 // spenta per un permesso negato o un errore: si riprova
