@@ -22,6 +22,13 @@ if [[ "$REF" =~ ^refs/tags/[vV]?([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
   V="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
   C=$(code "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}")
   REL=1; TAG="${REF#refs/tags/}"
+elif [[ -n "${PROVA_VERSION:-}" && "$EVENT" == "workflow_dispatch" && "$REF" != "refs/heads/${RELEASE_BRANCH:-main}" ]]; then
+  # APK di prova con numero alto (si installa sopra la versione pubblicata), da un ramo diverso da main: mai release
+  if [[ "$PROVA_VERSION" =~ ^([0-9]+)\.([0-9]{1,2})\.([0-9]{1,2})$ ]]; then
+    V="$PROVA_VERSION"; C=$(code "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}")
+  else
+    echo "::warning::Versione di prova non valida («$PROVA_VERSION»): serve N.N.N. Compilazione di prova normale"
+  fi
 elif [[ "$REF" == "refs/heads/${RELEASE_BRANCH:-main}" && "$EVENT" == "push" && -f "$FILE" ]]; then
   F="$(tr -d ' \t\r\n' < "$FILE")"
   if [[ "$F" =~ ^([0-9]+)\.([0-9]{1,2})\.([0-9]{1,2})$ ]]; then

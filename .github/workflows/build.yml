@@ -11,6 +11,11 @@ on:
     branches: ['**']
     tags: ['v*', 'V*', '[0-9]*']   # vale anche «V3.0.2» o «3.0.1»: la release si pubblica lo stesso
   workflow_dispatch:
+    inputs:
+      prova:
+        description: 'Versione di prova N.N.N (solo rami diversi da main, nessuna release)'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -34,7 +39,7 @@ jobs:
           if T="$(git ls-remote --tags origin 2>/dev/null)"; then
             TAGS="$(printf '%s\n' "$T" | sed 's#.*refs/tags/##; s#\^{}$##')"; TAGS_OK=1
           fi
-          TAGS="$TAGS" TAGS_OK="$TAGS_OK" bash .github/scripts/versione.sh
+          TAGS="$TAGS" TAGS_OK="$TAGS_OK" PROVA_VERSION="${{ github.event.inputs.prova }}" bash .github/scripts/versione.sh
 
       - uses: actions/setup-java@v4
         with:
