@@ -147,9 +147,15 @@ object Epg {
 
     private enum class BuildResult { DONE, ABORTED, FAILED }
 
+    // ultimo controllo andato a buon fine: con le stesse liste e le stesse fonti non si ripete prima di 10 minuti
+    // (schedule arriva a ogni battito del pannello e a ogni ritorno in Home: non deve rileggere ogni volta l'elenco dei canali)
+    private var checkedKey = ""
+    private var checkedAt = 0L
+
     fun schedule(pls: List<Playlist> = K.active()) {
         if (pls.isEmpty()) return
         synchronized(scheduleLock) {
+            if (!queued && requestKey(pls) == checkedKey && System.currentTimeMillis() - checkedAt < 10 * 60_000L) return
             val changed = pending?.let(::requestKey) != requestKey(pls)
             if (changed) { failedSignature = ""; retryAt = 0L }
             pending = pls.toList()
@@ -248,6 +254,8 @@ object Epg {
             } else {
                 pending = null
                 queued = false
+                checkedKey = requestKey(pls)
+                checkedAt = System.currentTimeMillis()
             }
         }
         if (rerun) worker.execute { runPending() }

@@ -53,6 +53,9 @@ class TrailerActivity : Activity() {
         videoId = intent.getStringExtra("id").orEmpty()
         if (Yt.id(videoId) == null) { finish(); return }
         val root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
+        // processo a parte: cartella dei dati del browser separata da quella del processo principale (obbligatorio da Android 9
+        // se anche l'app principale ha usato una WebView); va detto prima di creare la pagina
+        if (android.os.Build.VERSION.SDK_INT >= 28) try { WebView.setDataDirectorySuffix("trailer") } catch (_: Throwable) {}
         web = try { WebView(this) } catch (_: Throwable) { openYoutubeApp(); return }
         web.apply {
             setBackgroundColor(Color.BLACK)
