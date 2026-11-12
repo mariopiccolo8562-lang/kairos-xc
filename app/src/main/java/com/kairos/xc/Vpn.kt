@@ -116,6 +116,7 @@ object Vpns {
     /** nuova schermata: una richiesta di permesso rimasta senza risposta (schermata chiusa nel frattempo) si può rifare */
     fun forgetAsk() {
         if (asked) { asked = false; pending = null; if (KxVpn.state == "connecting") KxVpn.fail("VPN non attivata: riprova") }
+        DnsShield.forgetAsk()
     }
 
     /**
@@ -152,6 +153,8 @@ object Vpns {
 
     fun apply(a: Activity?) {
         val conf = wanted()
+        // DNS cifrato: solo senza la VPN del fornitore (con la VPN il DNS passa già nel tunnel)
+        DnsShield.sync(a, conf != null)
         if (conf == null) {
             if (KxVpn.active() || KxVpn.state == "on") KxVpn.stop()
             current = null
