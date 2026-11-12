@@ -905,7 +905,7 @@ class PlayerActivity : BaseActivity() {
             val r = row
             val p = r?.let { K.pl(it.s("pl")) }
             val net = Net.type()
-            if (r == null || p == null || p.mode != "auto" || Portals.cands(p).size < 2 || decoderProblem || net == "none" || (net == "wifi" && Net.rssi() in -120..-76)) false
+            if (r == null || p == null || (p.mode != "auto" && p.mode != "rot") || Portals.cands(p).size < 2 || decoderProblem || net == "none" || (net == "wifi" && Net.rssi() in -120..-76)) false
             else {
                 val oldOrigin = p.origin()
                 val switched = if (oldOrigin.isNotEmpty() && (live || vodUrl.startsWith(oldOrigin))) Portals.next(p) else null

@@ -24,6 +24,11 @@ object Portals {
         return when (p.mode) {
             "main" -> main
             "alt" -> candidates.getOrElse(1) { main }
+            "rot" -> {
+                val chosen = Store.portalChoice(p.id)
+                if (candidates.any { it == chosen && !isBad(it) }) chosen
+                else PortalRotation.firstHealthy(candidates, Store.code, ::isBad) ?: main
+            }
             else -> {
                 val chosen = Store.portalChoice(p.id)
                 if (candidates.any { it == chosen && !isBad(it) }) chosen
@@ -43,8 +48,8 @@ object Portals {
     }
 
     fun next(p: Playlist): Pair<String, String>? {
-        if (p.mode != "auto") return null
-        val candidates = cands(p)
+        if (p.mode != "auto" && p.mode != "rot") return null
+        val candidates = if (p.mode == "rot") PortalRotation.order(cands(p), Store.code) else cands(p)
         if (candidates.size < 2) return null
         val old = host(p)
         val current = candidates.indexOfFirst { hostKey(it) == hostKey(old) }
@@ -69,7 +74,7 @@ object Portals {
     fun probe(pls: List<Playlist>) {
         if (App.isPlayer(App.top)) return
         for (p in pls) {
-            if (App.isPlayer(App.top) || p.mode != "auto") continue
+            if (App.isPlayer(App.top) || (p.mode != "auto" && p.mode != "rot")) continue
             val candidates = cands(p)
             if (candidates.size < 2) continue
             val now = System.currentTimeMillis()
@@ -96,4 +101,17 @@ object Portals {
             if (best.isNotEmpty()) Store.setPortalChoice(p.id, best)
         }
     }
+}
+
+object PortalRotation {
+    fun order(candidates: List<String>, deviceCode: String): List<String> {
+        if (candidates.size < 2) return candidates
+        var hash = 0x811C9DC5.toInt()
+        deviceCode.forEach { hash = (hash xor it.code) * 0x01000193 }
+        val offset = Math.floorMod(hash, candidates.size)
+        return candidates.drop(offset) + candidates.take(offset)
+    }
+
+    fun firstHealthy(candidates: List<String>, deviceCode: String, bad: (String) -> Boolean): String? =
+        order(candidates, deviceCode).firstOrNull { !bad(it) }
 }

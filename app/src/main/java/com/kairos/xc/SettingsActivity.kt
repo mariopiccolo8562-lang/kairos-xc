@@ -78,7 +78,7 @@ class SettingsActivity : BaseActivity() {
         if (K.canSwitchPl()) {
             val cur = K.active().firstOrNull()
             val serverName = cur?.takeIf { it.alts.isNotEmpty() }?.let { Portals.name(it, Portals.host(it)) }.orEmpty()
-            val modeName = when (cur?.mode) { "main" -> "sempre il principale"; "alt" -> "sempre la riserva"; else -> "automatico" }
+            val modeName = when (cur?.mode) { "main" -> "sempre il principale"; "alt" -> "sempre la riserva"; "rot" -> "rotazione per dispositivo"; else -> "automatico" }
             val subtitle = if (serverName.isNotEmpty()) "${cur?.name} · $serverName ($modeName)" else cur?.name.orEmpty()
             row(R.drawable.ic_layers, "Portale", "Scegli il server da usare", subtitle) { choosePl() }
         }

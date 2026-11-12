@@ -60,7 +60,7 @@ class Playlist(
             return Playlist(
                 o.optString("id"), o.optString("name"), o.optString("type"), o.optString("url"),
                 o.optString("host"), o.optString("username"), o.optString("password"), o.optString("tag"),
-                strings("alts"), strings("altNames"), o.optString("mainName"), o.optString("mode").takeIf { it in listOf("auto", "main", "alt") } ?: "auto",
+                strings("alts"), strings("altNames"), o.optString("mainName"), o.optString("mode").takeIf { it in listOf("auto", "main", "alt", "rot") } ?: "auto",
             )
         }
         fun enc(s: String): String = URLEncoder.encode(s, "UTF-8").replace("+", "%20")
