@@ -119,7 +119,8 @@ class HomeActivity : BaseActivity() {
         }
         // VPN: solo se il fornitore la concede; accesa = piena, spenta = trasparente
         val vpn = findViewById<View>(R.id.vpn)
-        val show = s != null && s.vpnConf.isNotEmpty() && (s.vpnMode == "force" || (s.vpnMode == "allow" && s.perm("vpn")))
+        // scudo anche quando la VPN la gestisce il fornitore (spenta, o consentita senza permesso): voce «shield» del pannello
+        val show = s != null && (s.vpnShield || (s.vpnConf.isNotEmpty() && (s.vpnMode == "force" || (s.vpnMode == "allow" && s.perm("vpn")))))
         vpn.visibility = if (show) View.VISIBLE else View.GONE
         vpn.alpha = if (s?.vpnMode == "force" || KxVpn.active() || KxVpn.state == "on") 1f else 0.6f
         findViewById<View>(R.id.msgDot).visibility = if (K.unseenMessages().isNotEmpty()) View.VISIBLE else View.GONE
@@ -184,9 +185,11 @@ class HomeActivity : BaseActivity() {
         if (s.vpnMode == "force") {
             // «sempre attiva»: se è spenta (permesso negato o errore) la si richiede di nuovo
             if (KxVpn.state != "on") { Vpns.retry(); Vpns.apply(this); Ui.toast("VPN in attivazione…") }
-            else Ui.toast("VPN sempre attiva, impostata dal tuo fornitore")
+            else Ui.toast("VPN gestita dal fornitore")
             return
         }
+        // spenta dal pannello, o consentita senza il permesso di accenderla: il cliente non la tocca
+        if (!(s.vpnMode == "allow" && s.perm("vpn") && s.vpnConf.isNotEmpty())) { Ui.toast("VPN gestita dal fornitore"); return }
         Store.vpnUser = !Store.vpnUser
         if (Store.vpnUser) Vpns.retry()
         Vpns.apply(this)
