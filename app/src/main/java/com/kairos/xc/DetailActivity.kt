@@ -134,15 +134,38 @@ class DetailActivity : BaseActivity() {
         Ui.img(iv, url, w, w * 9 / 16, Img.BACKDROP)
     }
 
+    /**
+     * Trailer: quello che la linea mette nella scheda, altrimenti lo cerca il pannello (vedi Trailers).
+     * Il pulsante compare solo quando il trailer c'è; la ricerca parte una volta per scheda, in sottofondo.
+     */
+    private var trailerAsked = false
+    private fun trailer(lineValue: String, year: String) {
+        if (trailerAsked || isFinishing) return
+        trailerAsked = true
+        val name = title
+        val kind = if (table == "vod") "movie" else "series"
+        net {
+            val found = Trailers.find(name, year, kind, lineValue) ?: return@net
+            ui {
+                if (isFinishing) return@ui
+                val b = findViewById<Button>(R.id.trailer) ?: return@ui
+                b.visibility = View.VISIBLE
+                b.setOnClickListener { Trailers.open(this, found, name) }
+            }
+        }
+    }
+
     /* ---------------- dati dal server ---------------- */
     private fun loadInfo(r: Db.Row) {
         val p = pl
         if (table == "vod") {
-            val url = p?.api("get_vod_info", "&vod_id=" + r.s("sid")) ?: return
+            val url = p?.api("get_vod_info", "&vod_id=" + r.s("sid")) ?: run { trailer("", r.s("year")); return }
             net {
                 val info = try { JSONObject(Http.text(url, connectMs = 12_000, readMs = 20_000).text).optJSONObject("info") } catch (_: Exception) { null }
                 ui {
-                    if (info == null || isFinishing) return@ui
+                    if (isFinishing) return@ui
+                    trailer(info?.optString("youtube_trailer").orEmpty(), r.s("year").ifEmpty { info?.optString("releasedate").orEmpty().take(4) })
+                    if (info == null) return@ui
                     val plot = info.optString("plot").ifEmpty { info.optString("description") }
                     if (plot.isNotEmpty()) findViewById<TextView>(R.id.plot).text = plot
                     meta(r.s("year").ifEmpty { info.optString("releasedate").take(4) }, info.optString("rating").ifEmpty { r.s("rating") }, info.optString("genre"), durText(info))
@@ -190,6 +213,7 @@ class DetailActivity : BaseActivity() {
                 ui {
                     if (isFinishing) return@ui
                     loading.visibility = View.GONE
+                    trailer(info?.optString("youtube_trailer").orEmpty(), r.s("year").ifEmpty { info?.optString("releaseDate").orEmpty().take(4) })
                     if (info != null) {
                         val plot = info.optString("plot")
                         if (plot.isNotEmpty()) findViewById<TextView>(R.id.plot).text = plot
@@ -204,6 +228,7 @@ class DetailActivity : BaseActivity() {
                 val list = Db.episodes(r.l("_id")).mapIndexed { i, e -> Ep(Integer.toHexString(Playlist.pathOf(e.url).hashCode()), e.season, e.num, e.title, "", e.url, "", "") }
                 ui { setEpisodes(list) }
             }
+            trailer("", r.s("year")) // lista senza server Xtream: niente scheda, il trailer lo cerca il pannello
         }
     }
 

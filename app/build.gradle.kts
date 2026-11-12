@@ -84,6 +84,9 @@ dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
     // prove JVM (app/src/test): solo per le prove, non finisce nell'APK
     testImplementation("junit:junit:4.13.2")
+    // JSON e lettore XML veri per le prove della guida XMLTV e dei trailer (nell'app li dà Android)
+    testImplementation("org.json:json:20231013")
+    testImplementation("net.sf.kxml:kxml2:2.3.0")
 }
 
 // prove JVM nella CI: in caso di errore il registro mostra quale prova e perché

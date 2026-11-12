@@ -72,7 +72,7 @@ object Sync {
         exec.execute {
             val has = Db.hasData(ids)
             diskCheck = ""
-            if (has) dataOk = key else ui { if (!running && K.activeIds() == ids) start(force = true) }
+            if (has) { dataOk = key; Epg.schedule(pls) } else ui { if (!running && K.activeIds() == ids) start(force = true) }
         }
     }
 
@@ -81,7 +81,7 @@ object Sync {
         val pls = K.active()
         if (pls.isEmpty()) return
         if (!force) when (needed(pls)) {
-            false -> return
+            false -> { Epg.schedule(pls); return } // liste a posto: si controlla solo se la guida XMLTV è da rileggere (ogni 8 ore)
             null -> { checkDisk(pls); return }
             true -> {}
         }
@@ -170,6 +170,7 @@ object Sync {
                 failAt = 0L
                 // scaricato senza errori (anche se il server ha mandato liste vuote): non si riscarica di continuo
                 dataOk = ids.joinToString(",")
+                Epg.syncCompleted(pls) // liste nuove: la guida XMLTV si rilegge in sottofondo (parte quando il caricamento è finito)
             } else { failAt = System.currentTimeMillis(); failKey = ids.joinToString(",") }
             // chiesto dal pannello: nessun errore a video (si riprova come sempre)
             error = if (quiet) "" else errors.joinToString(" · ")

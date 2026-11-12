@@ -12,7 +12,13 @@ import android.database.sqlite.SQLiteOpenHelper
 object Db {
     private const val NAME = "lib.db"
     // 2: versioni dei canali · 3: colonna arch · 4: indice per le liste canali grandi · 5: indici per portale (liste già in ordine)
-    private const val VERSION = 5
+    // 6: guida XMLTV (programmi letti in sottofondo; le liste scaricate restano)
+    private const val VERSION = 6
+    private val V6 = listOf(
+        "CREATE TABLE IF NOT EXISTS prog (ch TEXT, start INTEGER, stop INTEGER, title TEXT, descr TEXT)",
+        "CREATE INDEX IF NOT EXISTS prog_ch_stop ON prog(ch, stop)",
+        "CREATE TABLE IF NOT EXISTS prog_stage (ch TEXT NOT NULL, start INTEGER NOT NULL, stop INTEGER NOT NULL, title TEXT NOT NULL, descr TEXT NOT NULL, PRIMARY KEY(ch, start))",
+    )
 
     /**
      * Indici della versione 5. Ogni lista legge solo il portale in uso, già nell'ordine in cui si mostra: «Tutti i canali» per
@@ -46,17 +52,18 @@ object Db {
         "CREATE INDEX series_k ON series(k)",
         "CREATE TABLE ep (_id INTEGER PRIMARY KEY, series INTEGER, season INTEGER, num INTEGER, title TEXT, url TEXT)",
         "CREATE INDEX ep_s ON ep(series)",
-    ) + V5.filter { it.startsWith("CREATE") }
+    ) + V5.filter { it.startsWith("CREATE") } + V6
 
     /** l'archivio si apre (e si aggiorna) solo dai thread di lavoro: le liste, il caricamento delle playlist */
     private class H(c: Context) : SQLiteOpenHelper(c, NAME, null, VERSION) {
         init { setWriteAheadLoggingEnabled(true) }
         override fun onCreate(db: SQLiteDatabase) { SCHEMA.forEach { db.execSQL(it) } }
         override fun onUpgrade(db: SQLiteDatabase, oldV: Int, newV: Int) {
-            // 3 → 4 → 5: solo indici, le liste scaricate restano
-            if (oldV == 3 || oldV == 4) {
+            // 3 → 4 → 5: solo indici; 6: tabelle della guida XMLTV. Le liste scaricate restano
+            if (oldV in 3..5) {
                 if (oldV == 3) db.execSQL("CREATE INDEX IF NOT EXISTS live_pcn ON live(pl, cat, num)")
-                V5.forEach { db.execSQL(it) }
+                if (oldV == 3 || oldV == 4) V5.forEach { db.execSQL(it) }
+                V6.forEach { db.execSQL(it) }
                 return
             }
             rebuild(db)
@@ -65,9 +72,10 @@ object Db {
         override fun onDowngrade(db: SQLiteDatabase, oldV: Int, newV: Int) = rebuild(db)
 
         private fun rebuild(db: SQLiteDatabase) {
-            listOf("cat", "live", "vod", "series", "ep").forEach { db.execSQL("DROP TABLE IF EXISTS $it") }
+            listOf("cat", "live", "vod", "series", "ep", "prog", "prog_stage").forEach { db.execSQL("DROP TABLE IF EXISTS $it") }
             onCreate(db)
             Store.clearSync() // archivio nuovo: le liste si ricaricano
+            Store.clearEpgBuild()
         }
     }
 
@@ -77,7 +85,42 @@ object Db {
     val w: SQLiteDatabase get() = h.writableDatabase
 
     fun clear(db: SQLiteDatabase) {
-        listOf("cat", "live", "vod", "series", "ep").forEach { db.execSQL("DELETE FROM $it") }
+        listOf("cat", "live", "vod", "series", "ep", "prog", "prog_stage").forEach { db.execSQL("DELETE FROM $it") }
+        Store.clearEpgBuild()
+    }
+
+    // ---------- guida XMLTV (tabella prog): canali da cercare nel file e programmi salvati ----------
+    class EpgChannel(val epg: String, val name: String)
+    class StoredProgramme(val channel: String, val start: Long, val stop: Long, val title: String, val description: String)
+
+    /** id della guida e nome di ogni canale dei portali in uso: con questi Epg riconosce i canali dentro il file XMLTV */
+    fun epgChannels(pls: List<String>): List<EpgChannel> {
+        if (pls.isEmpty()) return emptyList()
+        val q = base(pls, kids = false)
+        val out = ArrayList<EpgChannel>()
+        r.rawQuery("SELECT DISTINCT epg, name FROM live WHERE ${q.where} ORDER BY epg, name", q.args.toTypedArray()).use { c ->
+            while (c.moveToNext()) out.add(EpgChannel(c.getString(0) ?: "", c.getString(1) ?: ""))
+        }
+        return out
+    }
+
+    /** programmi salvati dei canali [channels] che toccano l'intervallo (secondi), in ordine di inizio; [visit] false = basta */
+    fun scanProgrammes(channels: List<String>, fromSeconds: Long, toSeconds: Long, maxRows: Int, visit: (StoredProgramme) -> Boolean) {
+        if (channels.isEmpty() || maxRows <= 0) return
+        var scanned = 0
+        var keepGoing = true
+        for (group in channels.distinct().chunked(300)) {
+            if (!keepGoing || scanned >= maxRows) break
+            val placeholders = group.joinToString(",") { "?" }
+            val args = group.toTypedArray() + arrayOf(fromSeconds.toString(), toSeconds.toString(), (maxRows - scanned).toString())
+            r.rawQuery("SELECT ch, start, stop, title, descr FROM prog WHERE ch IN ($placeholders) AND stop > ? AND start < ? ORDER BY start LIMIT ?", args).use { c ->
+                while (c.moveToNext()) {
+                    scanned++
+                    keepGoing = visit(StoredProgramme(c.getString(0) ?: "", c.getLong(1), c.getLong(2), c.getString(3) ?: "", c.getString(4) ?: ""))
+                    if (!keepGoing || scanned >= maxRows) break
+                }
+            }
+        }
     }
 
     /** toglie i contenuti di una playlist (prima di ricaricarla) */

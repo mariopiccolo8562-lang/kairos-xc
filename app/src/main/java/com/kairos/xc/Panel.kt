@@ -30,6 +30,9 @@ class Playlist(
             if (!us.isNullOrEmpty() && !pw.isNullOrEmpty() && u.path.endsWith(".php", ignoreCase = true)) Triple(Portals.host(this), us, pw) else null
         } catch (_: Exception) { null }
 
+    /** guida completa del server (XMLTV): la legge Epg in sottofondo */
+    fun xmltvUrl(): String? = xt?.let { "${it.first}/xmltv.php?username=${enc(it.second)}&password=${enc(it.third)}" }
+
     fun api(action: String, extra: String = ""): String? {
         val x = xt ?: return null
         return "${x.first}/player_api.php?username=${enc(x.second)}&password=${enc(x.third)}&action=$action$extra"

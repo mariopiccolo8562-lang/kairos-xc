@@ -162,6 +162,15 @@ object Store {
     private fun syncKey(ids: List<String>) = ids.joinToString(",")
     fun syncSigOf(ids: List<String>): String = s("syncSig:" + syncKey(ids))
     fun syncAtOf(ids: List<String>): Long = p.getLong("syncAt:" + syncKey(ids), 0)
+
+    // ---------- guida XMLTV: quando è stata letta e da quali fonti; indirizzo esterno messo dal cliente ----------
+    val epgBuiltAt: Long get() = p.getLong("epgBuiltAt", 0L)
+    val epgSourceSig: String get() = s("epgSourceSig")
+    var externalEpgUrl: String
+        get() = s("externalEpgUrl")
+        set(v) = put("externalEpgUrl", v.trim())
+    fun saveEpgBuild(signature: String, at: Long) { p.edit().putString("epgSourceSig", signature).putLong("epgBuiltAt", at).apply() }
+    fun clearEpgBuild() { p.edit().remove("epgSourceSig").remove("epgBuiltAt").apply() }
     fun setSynced(ids: List<String>, sig: String, at: Long) {
         p.edit().putString("syncSig:" + syncKey(ids), sig).putLong("syncAt:" + syncKey(ids), at).apply()
     }
