@@ -242,6 +242,7 @@ object Sync {
     /* ---------------- Xtream Codes ---------------- */
     /** una parte ([kind]: live / vod / series) di una playlist Xtream: le sue categorie e i suoi contenuti */
     private fun xtream(p: Playlist, st: Stmts, kind: String, step: (Int) -> Unit) {
+        val hs = Remote.hideSep
         val known = HashMap<String, Boolean>() // categoria → per adulti
         val catAction = when (kind) { "live" -> "get_live_categories"; "vod" -> "get_vod_categories"; else -> "get_series_categories" }
         eachObject(p.api(catAction) ?: return, K_CAT) { o ->
@@ -268,7 +269,7 @@ object Sync {
                 eachObject(p.api("get_live_streams") ?: return, K_LIVE) { o ->
                     val sid = o["stream_id"] ?: return@eachObject
                     val name = (o["name"] ?: "").trim()
-                    if (sepName(name)) return@eachObject
+                    if (hs && sepName(name)) return@eachObject
                     val (cat, ad) = catOf(o["category_id"])
                     n++
                     val s = st.live
@@ -286,7 +287,7 @@ object Sync {
             "vod" -> eachObject(p.api("get_vod_streams") ?: return, K_VOD) { o ->
                 val sid = o["stream_id"] ?: return@eachObject
                 val name = (o["name"] ?: "").trim()
-                if (sepName(name)) return@eachObject
+                if (hs && sepName(name)) return@eachObject
                 val (cat, ad) = catOf(o["category_id"])
                 val s = st.vod
                 s.clearBindings()
@@ -300,7 +301,7 @@ object Sync {
             else -> eachObject(p.api("get_series") ?: return, if (App.lite) K_SERIES_LITE else K_SERIES) { o ->
                 val sid = o["series_id"] ?: return@eachObject
                 val name = (o["name"] ?: "").trim()
-                if (sepName(name)) return@eachObject
+                if (hs && sepName(name)) return@eachObject
                 val (cat, ad) = catOf(o["category_id"])
                 val s = st.series
                 s.clearBindings()
@@ -423,6 +424,7 @@ object Sync {
     }
 
     private fun m3u(p: Playlist, st: Stmts, step: (Int) -> Unit) {
+        val hs = Remote.hideSep
         val c = Http.open(Playlist.fixUrl(p.url), connectMs = 20_000, readMs = 120_000)
         try {
             if (c.responseCode >= 400) throw Exception("la playlist ha risposto HTTP ${c.responseCode}")
@@ -460,7 +462,7 @@ object Sync {
                     }
                     val m = meta ?: continue
                     meta = null
-                    if (sepName(m.name)) continue
+                    if (hs && sepName(m.name)) continue
                     n++
                     val low = l.lowercase()
                     val key = p.id + ":" + Integer.toHexString(Playlist.pathOf(l).hashCode())
