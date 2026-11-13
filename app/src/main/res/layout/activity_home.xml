@@ -133,18 +133,33 @@
         android:layout_gravity="center"
         android:gravity="center"
         android:orientation="horizontal">
-        <LinearLayout android:id="@+id/live" style="@style/HomeCircle">
-            <ImageView android:id="@+id/liveIcon" android:layout_width="44dp" android:layout_height="44dp" android:duplicateParentState="true" android:src="@drawable/hi_live" />
-            <TextView style="@style/HomeCircleText" android:text="DIRETTA&#10;LIVE TV" />
-        </LinearLayout>
-        <LinearLayout android:id="@+id/film" style="@style/HomeCircle" android:layout_marginLeft="@dimen/home_gap">
-            <ImageView android:id="@+id/filmIcon" android:layout_width="44dp" android:layout_height="44dp" android:duplicateParentState="true" android:src="@drawable/hi_film" />
-            <TextView style="@style/HomeCircleText" android:text="FILM&#10;ON DEMAND" />
-        </LinearLayout>
-        <LinearLayout android:id="@+id/series" style="@style/HomeCircle" android:layout_marginLeft="@dimen/home_gap">
-            <ImageView android:id="@+id/seriesIcon" android:layout_width="44dp" android:layout_height="44dp" android:duplicateParentState="true" android:src="@drawable/hi_series" />
-            <TextView style="@style/HomeCircleText" android:text="SERIE&#10;TV" />
-        </LinearLayout>
+        <FrameLayout android:id="@+id/live" style="@style/HomeCircle">
+            <!-- dentro il cerchio: locandine dei titoli di tendenza (o il logo dell'ultimo canale), 13 novembre 2026 -->
+            <ImageView android:id="@+id/liveArt" android:layout_width="match_parent" android:layout_height="match_parent" android:alpha="0" android:contentDescription="" android:scaleType="centerCrop" />
+            <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent" android:duplicateParentState="true" android:gravity="center" android:orientation="vertical">
+                <ImageView android:id="@+id/liveIcon" android:layout_width="44dp" android:layout_height="44dp" android:duplicateParentState="true" android:src="@drawable/hi_live" />
+                <TextView style="@style/HomeCircleText" android:text="DIRETTA&#10;LIVE TV" />
+                <TextView android:id="@+id/liveNow" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:ellipsize="end" android:fontFamily="@font/poppins" android:gravity="center" android:maxWidth="120dp" android:shadowColor="#E6000000" android:shadowRadius="6" android:singleLine="true" android:textColor="#FFFFD54F" android:textSize="10sp" android:visibility="gone" />
+            </LinearLayout>
+        </FrameLayout>
+        <FrameLayout android:id="@+id/film" style="@style/HomeCircle" android:layout_marginLeft="@dimen/home_gap">
+            <!-- dentro il cerchio: locandine dei titoli di tendenza (o il logo dell'ultimo canale), 13 novembre 2026 -->
+            <ImageView android:id="@+id/filmArt" android:layout_width="match_parent" android:layout_height="match_parent" android:alpha="0" android:contentDescription="" android:scaleType="centerCrop" />
+            <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent" android:duplicateParentState="true" android:gravity="center" android:orientation="vertical">
+                <ImageView android:id="@+id/filmIcon" android:layout_width="44dp" android:layout_height="44dp" android:duplicateParentState="true" android:src="@drawable/hi_film" />
+                <TextView style="@style/HomeCircleText" android:text="FILM&#10;ON DEMAND" />
+                <TextView android:id="@+id/filmNow" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:ellipsize="end" android:fontFamily="@font/poppins" android:gravity="center" android:maxWidth="120dp" android:shadowColor="#E6000000" android:shadowRadius="6" android:singleLine="true" android:textColor="#FFFFD54F" android:textSize="10sp" android:visibility="gone" />
+            </LinearLayout>
+        </FrameLayout>
+        <FrameLayout android:id="@+id/series" style="@style/HomeCircle" android:layout_marginLeft="@dimen/home_gap">
+            <!-- dentro il cerchio: locandine dei titoli di tendenza (o il logo dell'ultimo canale), 13 novembre 2026 -->
+            <ImageView android:id="@+id/seriesArt" android:layout_width="match_parent" android:layout_height="match_parent" android:alpha="0" android:contentDescription="" android:scaleType="centerCrop" />
+            <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent" android:duplicateParentState="true" android:gravity="center" android:orientation="vertical">
+                <ImageView android:id="@+id/seriesIcon" android:layout_width="44dp" android:layout_height="44dp" android:duplicateParentState="true" android:src="@drawable/hi_series" />
+                <TextView style="@style/HomeCircleText" android:text="SERIE&#10;TV" />
+                <TextView android:id="@+id/seriesNow" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:ellipsize="end" android:fontFamily="@font/poppins" android:gravity="center" android:maxWidth="120dp" android:shadowColor="#E6000000" android:shadowRadius="6" android:singleLine="true" android:textColor="#FFFFD54F" android:textSize="10sp" android:visibility="gone" />
+            </LinearLayout>
+        </FrameLayout>
     </LinearLayout>
 
     <!-- in basso -->

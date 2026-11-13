@@ -351,6 +351,32 @@ object Db {
     class Hit(val table: String, val id: Long, val name: String, val img: String, val cat: String, val k: String)
 
     /** testo cercato così com'è: % e _ sono lettere normali (es. «UK_BBC», «100%») */
+    /** titoli di una classifica (titolo, anno) che la linea ha davvero, nell'ordine della classifica (vedi [Trend]) */
+    fun findByTitles(table: String, titles: List<Pair<String, Int?>>, pls: List<String>, kids: Boolean, limit: Int = 10): List<Card> {
+        val max = limit.coerceIn(0, 20)
+        if (table != "vod" && table != "series" || pls.isEmpty() || max == 0) return emptyList()
+        val plot = if (table == "series") "plot" else "''"
+        val out = ArrayList<Card>()
+        val seen = HashSet<String>()
+        for ((title, year) in titles) {
+            if (out.size >= max || title.isBlank()) break
+            val q = base(pls, kids)
+            q.where += " AND name LIKE ? ESCAPE '\\'"
+            q.args.add("%${like(title)}%")
+            r.rawQuery("SELECT _id, k, name, img, year, rating, $plot FROM $table WHERE ${q.where} ORDER BY added DESC, _id LIMIT 8", q.args.toTypedArray()).use { c ->
+                while (c.moveToNext()) {
+                    val card = Card(table, c.getLong(0), c.getString(1) ?: "", c.getString(2) ?: "", c.getString(3) ?: "",
+                        c.getString(4) ?: "", c.getString(5) ?: "", c.getString(6) ?: "")
+                    if (TitleMatch.matches(card.name, card.year.toIntOrNull(), title, year) && seen.add(card.k)) {
+                        out.add(card)
+                        if (out.size >= max) break
+                    }
+                }
+            }
+        }
+        return out
+    }
+
     private fun like(t: String) = t.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
     /** titolo cercato per chiave stabile (portale:numero), non cambia quando le liste si aggiornano */

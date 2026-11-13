@@ -19,6 +19,23 @@ class HomeActivity : BaseActivity() {
     private lateinit var sync: TextView
     private val syncL: () -> Unit = { showSync() }
 
+    /* locandine dentro i cerchi (13 novembre 2026): Film e Serie con i titoli di tendenza che la linea ha davvero,
+       Diretta con il logo dell'ultimo canale e il programma in onda. Spente con «Leggera»/«Leggerissima» e dal pannello. */
+    private class Art(val image: String, val label: String)
+    private var films: List<Art> = emptyList()
+    private var series: List<Art> = emptyList()
+    private var live: Art? = null
+    private var artIndex = 0
+    private var artReq = 0
+    private var artShown = false
+    private val artRotate = object : Runnable {
+        override fun run() {
+            artIndex++
+            showArt(true)
+            App.main.postDelayed(this, 8_000L)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         App.main.postDelayed({ Parental.firstRun(this) }, 2500) // primo avvio: scelta del PIN del controllo genitori
@@ -50,6 +67,77 @@ class HomeActivity : BaseActivity() {
 
         Sync.listen(syncL)
         live.requestFocus()
+        for (id in intArrayOf(R.id.liveArt, R.id.filmArt, R.id.seriesArt)) {
+            findViewById<ImageView>(id).apply {
+                outlineProvider = object : android.view.ViewOutlineProvider() {
+                    override fun getOutline(view: View, outline: android.graphics.Outline) { outline.setOval(0, 0, view.width, view.height) }
+                }
+                clipToOutline = true
+            }
+        }
+        findViewById<ImageView>(R.id.liveArt).scaleType = ImageView.ScaleType.FIT_CENTER
+    }
+
+    private fun artOn() = !App.lite && !App.max && Remote.player("o.homeArt", "on") != "off"
+
+    private fun loadArt() {
+        if (!artOn()) { films = emptyList(); series = emptyList(); live = null; showArt(false); return }
+        val pls = K.activeIds()
+        val kids = K.kids
+        val lastK = Store.lastLiveK
+        val token = ++artReq
+        bg {
+            val trend = Trend.get()
+            val tf = trend?.let { Db.findByTitles("vod", it.movies, pls, kids, 5) }.orEmpty().filter { it.img.startsWith("http") }
+            val ts = trend?.let { Db.findByTitles("series", it.series, pls, kids, 5) }.orEmpty().filter { it.img.startsWith("http") }
+            val f = if (tf.size >= 3) tf.mapIndexed { i, c -> Art(c.img, "N. ${i + 1} · ${c.name}") }
+                else Db.cards("vod", Db.NEW, pls, kids, emptySet(), 12).filter { it.img.startsWith("http") }.take(5).map { Art(it.img, "Novità · ${it.name}") }
+            val s = if (ts.size >= 3) ts.mapIndexed { i, c -> Art(c.img, "N. ${i + 1} · ${c.name}") }
+                else Db.cards("series", Db.NEW, pls, kids, emptySet(), 12).filter { it.img.startsWith("http") }.take(5).map { Art(it.img, "Novità · ${it.name}") }
+            val row = lastK.takeIf { it.isNotEmpty() }?.let { Db.oneByK("live", it) }
+            val prog = row?.let { try { Epg.now(K.pl(it.s("pl")), it.s("sid"), it.s("epg"), it.s("name")) } catch (_: Exception) { null } }
+            val l = row?.let { Art(it.s("logo"), prog?.title?.takeIf { t -> t.isNotBlank() }?.let { t -> "Ora · $t" } ?: it.s("name")) }
+            ui {
+                if (token != artReq || isFinishing) return@ui
+                films = f
+                series = s
+                live = l
+                showArt(false)
+            }
+        }
+    }
+
+    /** [animate]: la locandina nuova entra in dissolvenza (rotazione ogni 8 secondi) */
+    private fun showArt(animate: Boolean) {
+        fun put(artId: Int, nowId: Int, item: Art?, kind: Int, alpha: Float) {
+            val art = findViewById<ImageView>(artId)
+            val now = findViewById<TextView>(nowId)
+            if (item == null || item.image.isBlank() && item.label.isBlank()) {
+                Img.clear(art)
+                art.setImageDrawable(null)
+                art.alpha = 0f
+                now.visibility = View.GONE
+                return
+            }
+            now.text = item.label
+            now.visibility = if (item.label.isBlank()) View.GONE else View.VISIBLE
+            if (item.image.isBlank()) { Img.clear(art); art.setImageDrawable(null); art.alpha = 0f; return }
+            val w = art.width.takeIf { it > 0 } ?: Ui.dp(this, 150)
+            Img.load(art, item.image, w, w, kind)
+            if (animate && !App.lite) {
+                art.alpha = 0f
+                art.animate().alpha(alpha).setDuration(500).start()
+            } else art.alpha = alpha
+        }
+        put(R.id.liveArt, R.id.liveNow, live, Img.LOGO, 0.28f)
+        put(R.id.filmArt, R.id.filmNow, films.takeIf { it.isNotEmpty() }?.let { it[artIndex % it.size] }, Img.POSTER, 0.5f)
+        put(R.id.seriesArt, R.id.seriesNow, series.takeIf { it.isNotEmpty() }?.let { it[(artIndex + 1) % it.size] }, Img.POSTER, 0.5f)
+        artShown = films.isNotEmpty() || series.isNotEmpty() || live != null
+    }
+
+    override fun onPause() {
+        super.onPause()
+        App.main.removeCallbacks(artRotate)
     }
 
     /** cerchi grandi quanto lo schermo permette (TV, chiavette e telefoni in orizzontale) */
@@ -69,6 +157,11 @@ class HomeActivity : BaseActivity() {
             val icon = findViewById<View>(when (id) { R.id.live -> R.id.liveIcon; R.id.film -> R.id.filmIcon; else -> R.id.seriesIcon })
             icon.layoutParams.width = (vis * 0.26f).toInt()
             icon.layoutParams.height = (vis * 0.26f).toInt()
+            // la locandina sta dentro l'anello (il cerchio visibile è l'80 %; l'anello ne prende un altro poco)
+            val art = findViewById<View>(when (id) { R.id.live -> R.id.liveArt; R.id.film -> R.id.filmArt; else -> R.id.seriesArt })
+            val inset = (size * 0.135f).toInt()
+            (art.layoutParams as android.widget.FrameLayout.LayoutParams).setMargins(inset, inset, inset, inset)
+            findViewById<TextView>(when (id) { R.id.live -> R.id.liveNow; R.id.film -> R.id.filmNow; else -> R.id.seriesNow }).maxWidth = (vis * 0.72f).toInt()
         }
     }
 
@@ -84,6 +177,9 @@ class HomeActivity : BaseActivity() {
         Sync.start()
         showSync()
         newMessages()
+        loadArt()
+        App.main.removeCallbacks(artRotate)
+        if (artOn()) App.main.postDelayed(artRotate, 8_000L)
     }
 
     override fun onDestroy() {
@@ -95,11 +191,13 @@ class HomeActivity : BaseActivity() {
     override fun releaseImages() {
         findViewById<ImageView>(R.id.bg).setImageDrawable(null)
         for (id in CIRCLES) findViewById<View>(id).background = null
+        for (id in intArrayOf(R.id.liveArt, R.id.filmArt, R.id.seriesArt)) findViewById<ImageView>(id).let { Img.clear(it); it.setImageDrawable(null) }
     }
 
     override fun restoreImages() {
         if (!App.max) findViewById<ImageView>(R.id.bg).setImageResource(R.drawable.home_bg)
         for (id in CIRCLES) findViewById<View>(id).setBackgroundResource(R.drawable.home_circle)
+        if (artShown) showArt(false)
     }
 
     override fun onStateChanged() {

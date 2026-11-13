@@ -35,6 +35,8 @@ import kotlin.system.exitProcess
  */
 object Remote {
     private val playerValues = mapOf(
+        // locandine dei titoli di tendenza dentro i cerchi della Home (13 novembre 2026)
+        "o.homeArt" to listOf("on", "off"),
         "o.engLive" to listOf("auto", "exo", "vlc"),
         "o.engMovie" to listOf("auto", "exo", "vlc"),
         "o.engSeries" to listOf("auto", "exo", "vlc"),
