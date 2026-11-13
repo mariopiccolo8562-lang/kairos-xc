@@ -97,6 +97,11 @@
                 <ImageView style="@style/HomeTileIcon" android:src="@drawable/hi_vpn" />
                 <TextView style="@style/HomeTileLabel" android:text="VPN" />
             </LinearLayout>
+            <!-- DNS cifrato acceso dal fornitore: verde = attivo, giallo = non partito (13 novembre 2026) -->
+            <LinearLayout android:id="@+id/dns" style="@style/HomeTile" android:contentDescription="DNS cifrato" android:visibility="gone">
+                <ImageView android:id="@+id/dnsIcon" style="@style/HomeTileIcon" android:src="@drawable/ic_dns_lock" />
+                <TextView android:id="@+id/dnsLabel" style="@style/HomeTileLabel" android:text="DNS" />
+            </LinearLayout>
             <FrameLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content">

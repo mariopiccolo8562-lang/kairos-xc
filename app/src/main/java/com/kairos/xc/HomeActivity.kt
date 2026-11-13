@@ -38,6 +38,7 @@ class HomeActivity : BaseActivity() {
         findViewById<View>(R.id.series).setOnClickListener { open(VodActivity::class.java) { putExtra("kind", "series") } }
         findViewById<View>(R.id.search).setOnClickListener { open(SearchActivity::class.java) }
         findViewById<View>(R.id.vpn).setOnClickListener { toggleVpn() }
+        findViewById<View>(R.id.dns).setOnClickListener { dnsTap() }
         findViewById<View>(R.id.msg).setOnClickListener { showMessages() }
         findViewById<View>(R.id.update).setOnClickListener { update() }
         findViewById<View>(R.id.account).setOnClickListener { portals() }
@@ -45,7 +46,7 @@ class HomeActivity : BaseActivity() {
         findViewById<View>(R.id.settings).setOnClickListener { open(SettingsActivity::class.java) }
 
         for (id in listOf(R.id.live, R.id.film, R.id.series)) Ui.zoom(findViewById(id), 1.08f)
-        for (id in listOf(R.id.search, R.id.vpn, R.id.msg, R.id.update, R.id.account, R.id.favorite, R.id.settings)) Ui.zoom(findViewById(id), 1.08f)
+        for (id in listOf(R.id.search, R.id.vpn, R.id.dns, R.id.msg, R.id.update, R.id.account, R.id.favorite, R.id.settings)) Ui.zoom(findViewById(id), 1.08f)
 
         Sync.listen(syncL)
         live.requestFocus()
@@ -124,6 +125,20 @@ class HomeActivity : BaseActivity() {
         vpn.visibility = if (show) View.VISIBLE else View.GONE
         vpn.alpha = if (s?.vpnMode == "force" || KxVpn.active() || KxVpn.state == "on") 1f else 0.6f
         findViewById<View>(R.id.msgDot).visibility = if (K.unseenMessages().isNotEmpty()) View.VISIBLE else View.GONE
+        onDnsChanged()
+    }
+
+    /** tessera «DNS»: c'è quando il fornitore ha acceso il DNS cifrato; colore e frase in [DnsBadge] */
+    override fun onDnsChanged() {
+        val tile = findViewById<View>(R.id.dns) ?: return
+        val st = dnsState()
+        tile.visibility = if (st.isEmpty()) View.GONE else View.VISIBLE
+        if (st.isEmpty()) return
+        val c = DnsBadge.color(st)
+        findViewById<ImageView>(R.id.dnsIcon).imageTintList = android.content.res.ColorStateList.valueOf(c)
+        findViewById<TextView>(R.id.dnsLabel).setTextColor(c)
+        tile.alpha = if (st == "off") 0.7f else 1f
+        tile.contentDescription = DnsBadge.text(st)
     }
 
     private fun showSync() {
