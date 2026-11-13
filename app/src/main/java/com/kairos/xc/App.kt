@@ -33,6 +33,8 @@ class App : Application() {
         Db.init(this)
         lite = detectLite()
         max = Store.liteMode == "max"
+        // chiavetta da 1 GB circa (classe D) con la modalità leggera «Automatica»: cache e buffer più piccoli (13 novembre 2026)
+        tiny = !max && Store.liteMode == "auto" && Line.device() == "D"
         // versione nuova (e APK già scaricato) dall'ultimo controllo: il blocco obbligatorio vale subito, anche senza rete
         Updater.restore()
         // immagini (vedi Img): la Home non ne carica, quindi Glide si prepara in sottofondo dopo i primi fotogrammi
@@ -101,6 +103,8 @@ class App : Application() {
         @Volatile var lite = false
         /** «Leggerissima»: per le chiavette più vecchie (liste senza loghi, immagini più piccole, canali in HD) */
         @Volatile var max = false
+        /** pacchetto «chiavetta da 1 GB» (vedi onCreate) */
+        @Volatile var tiny = false
         val main = Handler(Looper.getMainLooper())
         val io: ExecutorService = Executors.newFixedThreadPool(3) { r -> Thread(r, "kx-io").apply { isDaemon = true } }
         var started = 0

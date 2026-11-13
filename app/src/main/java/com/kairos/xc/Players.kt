@@ -46,8 +46,8 @@ object Players {
         val scale = when (mode) { "fast" -> 0.6; "stable" -> 1.6; else -> 1.0 }
         val min = (b.min * scale).toInt().coerceAtLeast(1)
         val max = (b.max * scale).toInt().coerceAtLeast(min)
-        val mb = (b.mb * scale).toInt().coerceAtLeast(4)
-        val back = (b.back * scale).toInt().coerceAtLeast(0)
+        val mb = (b.mb * scale * (if (App.tiny) 0.75 else 1.0)).toInt().coerceAtLeast(4) // 1 GB: il video lascia memoria all'interfaccia
+        val back = if (App.tiny) 0 else (b.back * scale).toInt().coerceAtLeast(0)
         return Buf(min, max, (b.start * scale).toInt().coerceIn(1, min), (b.rebuffer * scale).toInt().coerceIn(1, max), mb, back)
     }
 

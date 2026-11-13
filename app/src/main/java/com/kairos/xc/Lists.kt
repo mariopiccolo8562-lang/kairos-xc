@@ -40,7 +40,7 @@ abstract class CursorAdapter<VH : RecyclerView.ViewHolder> : RecyclerView.Adapte
 }
 
 /** righe fuori schermo tenute pronte per tornare indietro al volo */
-private fun viewCache(): Int = if (App.lite) 6 else 14
+private fun viewCache(): Int = if (App.tiny) 4 else if (App.lite) 6 else 14
 
 /** liste veloci: niente animazioni, cache di viste, dimensione fissa */
 fun RecyclerView.fast(horizontal: Boolean = false) {

@@ -67,7 +67,7 @@ object Img {
     private fun builder(c: Context): GlideBuilder {
         val low = low()
         // memoria: come prima (4 / 6 / 20 MB), ma sulla classe D mai oltre 1/8 della memoria concessa all'app
-        var mem = if (App.max) 4L shl 20 else if (App.lite) 6L shl 20 else 20L shl 20
+        var mem = if (App.max || App.tiny) 4L shl 20 else if (App.lite) 6L shl 20 else 20L shl 20
         if (Line.device() == "D") mem = minOf(mem, (appMemory(c) / 8).coerceAtLeast(4L shl 20))
         // disco: cartella cache predefinita di Glide (quella di sempre), tetto per classe
         val disk = if (low) 150L shl 20 else 250L shl 20
