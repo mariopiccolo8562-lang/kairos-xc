@@ -78,7 +78,8 @@ class HomeActivity : BaseActivity() {
         findViewById<ImageView>(R.id.liveArt).scaleType = ImageView.ScaleType.FIT_CENTER
     }
 
-    private fun artOn() = !App.lite && !App.max && Remote.player("o.homeArt", "on") != "off"
+    // anche sulle chiavette leggere (13 novembre 2026): una locandina per cerchio, senza rotazione (vedi artRotate)
+    private fun artOn() = !App.max && Remote.player("o.homeArt", "on") != "off"
 
     private fun loadArt() {
         if (!artOn()) { films = emptyList(); series = emptyList(); live = null; showArt(false); return }
@@ -179,7 +180,7 @@ class HomeActivity : BaseActivity() {
         newMessages()
         loadArt()
         App.main.removeCallbacks(artRotate)
-        if (artOn()) App.main.postDelayed(artRotate, 8_000L)
+        if (artOn() && !App.lite) App.main.postDelayed(artRotate, 8_000L)
     }
 
     override fun onDestroy() {
