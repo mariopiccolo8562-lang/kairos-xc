@@ -594,13 +594,13 @@ class PlayerActivity : BaseActivity() {
                 return
             }
             // subito dopo un avvio (cambio di versione o di canale) il fornitore può contare ancora la connessione di prima
-            // (linee con una sola connessione): 403/429/458/503/509 prima dell'immagine ⇒ stesso indirizzo dopo 1,5 - 3 - 4,5 s,
+            // (linee con una sola connessione): 403/429/458/503/509 prima dell'immagine ⇒ stesso indirizzo dopo 1 - 2 - 3 s,
             // prima di cambiare formato o versione
             if (live && code == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS && !firstReady && slotTries < 3 && httpCode(error) in SLOT_BUSY) {
                 slotTries++
                 showSpin()
                 App.main.removeCallbacks(slotR)
-                App.main.postDelayed(slotR, 1_500L * slotTries)
+                App.main.postDelayed(slotR, 1_000L * slotTries)
                 return
             }
             // discesa anticipata e la versione leggera dà errore prima di partire: si torna a quella di prima (stava ancora andando)
@@ -766,7 +766,7 @@ class PlayerActivity : BaseActivity() {
     }
 
     /**
-     * la versione leggera della discesa anticipata non parte (errore, o niente immagine entro 12 s): si torna a quella di prima,
+     * la versione leggera della discesa anticipata non parte (errore, o niente immagine entro 6 s): si torna a quella di prima,
      * che stava ancora andando; su questo canale niente discese anticipate per 10 minuti, e quella versione leggera si salta
      */
     private fun drainBack(why: String): Boolean {
@@ -783,7 +783,7 @@ class PlayerActivity : BaseActivity() {
     }
 
     private fun checkDrainStart() {
-        if (drainFrom > 0L && !firstReady && mono() - drainAt >= 12_000L) drainBack("avvio oltre 12 s")
+        if (drainFrom > 0L && !firstReady && mono() - drainAt >= 6_000L) drainBack("avvio oltre 6 s")
     }
 
     /** fill-ratio dei primi 10 s: secondi di video che arrivano per ogni secondo reale (sul TS: > 1 la linea regge il canale) */
