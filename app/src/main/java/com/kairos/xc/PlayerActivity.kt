@@ -907,7 +907,7 @@ class PlayerActivity : BaseActivity() {
         val itemKey = if (live) "live:${row?.s("pl").orEmpty()}:$curId" else "$kind:${recent?.optString("pl").orEmpty()}:$vodId"
         if (!vlcFallbacks.add(itemKey)) return false
         val i = Intent(this, VlcActivity::class.java)
-        val fallbackUrl = rebaseVodUrl(vodUrl, recent)
+        val fallbackUrl = recent?.optString("pl")?.let { K.pl(it)?.fix(vodUrl) } ?: vodUrl
         if (live) i.putExtra("kind", "live").putExtra("cat", cat).putExtra("rowId", curId)
         else i.putExtra("kind", kind).putExtra("id", vodId).putExtra("title", vodTitle)
             .putExtra("sub", vodSub).putExtra("url", fallbackUrl)
@@ -929,7 +929,7 @@ class PlayerActivity : BaseActivity() {
     }
 
     private fun rebaseVodUrl(url: String, metadata: JSONObject?): String =
-        vodPlaylist(url, metadata)?.let { Portals.rebase(it, url) } ?: url
+        vodPlaylist(url, metadata)?.let { p -> Portals.rebase(p, p.fix(url)) } ?: url
 
     private fun rebaseQueue(source: JSONArray): JSONArray = JSONArray().apply {
         for (i in 0 until source.length()) {
