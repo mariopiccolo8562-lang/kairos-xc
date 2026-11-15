@@ -251,6 +251,13 @@ class PlayerActivity : BaseActivity() {
     private val tuneR = Runnable { if (ids.isNotEmpty()) tune(ids[idx]) }
     private val zapR = Runnable { commitZap() }
     private val retryR = Runnable { startUrl() }
+    /** linea ancora occupata dalla connessione di prima: stesso indirizzo dopo una pausa (vedi onPlayerError) */
+    private var slotTries = 0
+    private val slotR = Runnable { if (!isFinishing && player != null) startUrl() }
+    /** discesa anticipata in corso: versione da cui si è scesi (0 = nessuna) e quando; versioni leggere che non partivano */
+    private var drainFrom = 0L
+    private var drainAt = 0L
+    private val badVariants = HashSet<Long>()
     /** rete assente: si aspetta che torni e si riparte da soli */
     private val netWaitR = object : Runnable {
         override fun run() {
@@ -306,6 +313,7 @@ class PlayerActivity : BaseActivity() {
             checkResolved()
             checkReduced()
             checkDrain()
+            checkDrainStart()
             checkFill()
             if (live) measureFps()
             if (!live) { savePos(false); goodPos() }
@@ -400,6 +408,7 @@ class PlayerActivity : BaseActivity() {
     override fun onStop() {
         super.onStop()
         App.main.removeCallbacks(tickR)
+        App.main.removeCallbacks(slotR)
         App.main.removeCallbacks(retryR)
         App.main.removeCallbacks(netWaitR)
         App.main.removeCallbacks(giveUpR)
@@ -424,6 +433,7 @@ class PlayerActivity : BaseActivity() {
     override fun onDestroy() {
         super.onDestroy()
         App.main.removeCallbacks(hideR)
+        App.main.removeCallbacks(slotR)
         App.main.removeCallbacks(tuneR)
         App.main.removeCallbacks(zapR)
         App.main.removeCallbacks(retryR)
@@ -516,7 +526,7 @@ class PlayerActivity : BaseActivity() {
                         stallMs += now - bufferingSince
                         stalled()
                     }
-                    if (!firstReady) { playStartAt = now; fillT0 = now; fillP0 = player?.bufferedPosition ?: 0L }
+                    if (!firstReady) { playStartAt = now; fillT0 = now; fillP0 = player?.bufferedPosition ?: 0L; slotTries = 0; drainFrom = 0L }
                     seeking = false
                     firstReady = true
                     reconnects = 0
@@ -583,6 +593,18 @@ class PlayerActivity : BaseActivity() {
                 App.main.postDelayed(netWaitR, 3_000)
                 return
             }
+            // subito dopo un avvio (cambio di versione o di canale) il fornitore può contare ancora la connessione di prima
+            // (linee con una sola connessione): 403/429/458/503/509 prima dell'immagine ⇒ stesso indirizzo dopo 1,5 - 3 - 4,5 s,
+            // prima di cambiare formato o versione
+            if (live && code == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS && !firstReady && slotTries < 3 && httpCode(error) in SLOT_BUSY) {
+                slotTries++
+                showSpin()
+                App.main.removeCallbacks(slotR)
+                App.main.postDelayed(slotR, 1_500L * slotTries)
+                return
+            }
+            // discesa anticipata e la versione leggera dà errore prima di partire: si torna a quella di prima (stava ancora andando)
+            if (live && drainFrom > 0L && !firstReady && drainBack(name.ifEmpty { "errore" })) return
             // il server non ha questo formato (es. m3u8 non abilitato): subito l'altro, senza attese
             if (live && (code == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS || code == PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND) && urls.size > 1 && altTried < urls.size - 1) {
                 altTried++
@@ -734,10 +756,34 @@ class PlayerActivity : BaseActivity() {
         // calo vero e costante verso lo stallo (non un vuoto del Wi-Fi): solo il canale in onda, i successivi partono pieni
         if (!QualityPolicy.draining(drainSamples, now, cur, QualityPolicy.drainThreshold(Players.buf(true, playerCls).rebuffer))) return
         val r = row ?: return
+        val from = r.l("_id")
         if (lighterThan(r) == null || !switchLighter(byLine = true, carry = false)) return
+        drainFrom = from
+        drainAt = now
         drainSamples.clear()
         drainUntil = now + 60_000L
         event("stall", "qualità ridotta in anticipo", "risolto", "buffer in calo")
+    }
+
+    /**
+     * la versione leggera della discesa anticipata non parte (errore, o niente immagine entro 12 s): si torna a quella di prima,
+     * che stava ancora andando; su questo canale niente discese anticipate per 10 minuti, e quella versione leggera si salta
+     */
+    private fun drainBack(why: String): Boolean {
+        val from = drainFrom
+        if (from <= 0L) return false
+        drainFrom = 0L
+        if (baseRow?.l("_id") != curId) return false // nel frattempo il cliente ha cambiato canale
+        row?.l("_id")?.let { badVariants.add(it) }
+        drainUntil = mono() + 10 * 60_000L
+        reduced = false
+        event("stall", "versione leggera non partita: torno a quella di prima", "risolto", why)
+        tune(from, variant = true)
+        return true
+    }
+
+    private fun checkDrainStart() {
+        if (drainFrom > 0L && !firstReady && mono() - drainAt >= 12_000L) drainBack("avvio oltre 12 s")
     }
 
     /** fill-ratio dei primi 10 s: secondi di video che arrivano per ogni secondo reale (sul TS: > 1 la linea regge il canale) */
@@ -989,7 +1035,7 @@ class PlayerActivity : BaseActivity() {
     private fun lighterThan(r: Db.Row): Db.Variant? {
         val q = r.l("q").toInt()
         val hv = r.l("hevc") == 1L
-        return variants.filter { it.q < q && (!it.hevc || hv) }.maxByOrNull { it.q }
+        return variants.filter { it.q < q && (!it.hevc || hv) && it.id !in badVariants }.maxByOrNull { it.q }
     }
 
     /**
@@ -1195,6 +1241,8 @@ class PlayerActivity : BaseActivity() {
         if (!variant && Updater.must()) { leave(); return }
         if (!variant) {
             drainSamples.clear()
+            drainFrom = 0L
+            badVariants.clear()
             closeProblem() // problema del canale di prima: il cliente è passato oltre
             setSoft(false, null)
             audioOn()
@@ -1207,6 +1255,8 @@ class PlayerActivity : BaseActivity() {
         val my = ++tuneSeq
         if (!variant) curId = id
         App.main.removeCallbacks(retryR)
+        App.main.removeCallbacks(slotR)
+        slotTries = 0
         stopCushion()
         msg.visibility = View.GONE
         showSpin()
@@ -1272,7 +1322,12 @@ class PlayerActivity : BaseActivity() {
                 blocked = block != null
                 if (block != null) { player?.stop(); hideSpin(); showMsg(block); return@ui }
                 if (list.isEmpty()) { hideSpin(); showMsg("Indirizzo del canale non valido."); return@ui }
-                ensureClass() // classe effettiva ricalcolata a ogni avvio: se è cambiata il lettore si ricrea
+                // classe effettiva ricalcolata a ogni avvio di canale: se è cambiata il lettore si ricrea. Mai in un cambio di
+                // versione dello stesso canale (qualità ridotta o di nuovo piena): rifare il decoder sulla stessa superficie
+                // lasciava l'immagine ferma sulle chiavette; la classe nuova vale dal canale successivo
+                if (!variant) ensureClass()
+                // cambio di versione: resta l'ultima immagine finché arriva la nuova (niente schermo nero); fra i canali no
+                pv.setKeepContentOnPlayerReset(variant)
                 startUrl()
                 if (!variant) {
                     Pulse.watch(Pulse.Watch("live", "", r0.s("name"), r0.s("k"), "", r0.s("pl")))
@@ -1651,6 +1706,19 @@ class PlayerActivity : BaseActivity() {
         return super.onTouchEvent(event)
     }
 }
+
+/** codice HTTP del server dietro l'errore del lettore, 0 se non c'è */
+internal fun httpCode(e: Throwable?): Int {
+    var c = e; var n = 0
+    while (c != null && n++ < 8) {
+        if (c is androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException) return c.responseCode
+        c = c.cause
+    }
+    return 0
+}
+
+/** risposte del fornitore con la linea ancora occupata dalla connessione di prima (o il server pieno per un attimo) */
+internal val SLOT_BUSY = setOf(403, 429, 458, 503, 509)
 
 /** codice HTTP del server dietro l'errore del lettore (« · HTTP 404»), vuoto se non c'è: nelle segnalazioni
     si vede subito se è la linea (401/403), il contenuto che non esiste (404) o il server (5xx) */
