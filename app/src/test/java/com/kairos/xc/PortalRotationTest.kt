@@ -53,4 +53,24 @@ class PortalRotationTest {
             Portals.rebaseUrl(url, "https://main.example", "https://backup.example"),
         )
     }
+
+    @Test
+    fun playlistRebaseOriginDoesNotRewriteAnAlreadyExtendedOrigin() {
+        assertEquals(
+            "http://tv.example:8080/s/1.mp4",
+            Playlist.rebaseOrigin(
+                "http://tv.example:8080/s/1.mp4",
+                "http://tv.example",
+                "http://tv.example:8080",
+            ),
+        )
+        assertEquals(
+            "http://tv.example:8080/s/1.mp4",
+            Playlist.rebaseOrigin(
+                "http://tv.example/s/1.mp4",
+                "http://tv.example",
+                "http://tv.example:8080",
+            ),
+        )
+    }
 }

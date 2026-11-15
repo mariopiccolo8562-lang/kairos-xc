@@ -51,10 +51,16 @@ class Playlist(
     fun fix(stored: String): String {
         val old = Store.plOrigin(id)
         val now = origin()
-        return if (old.isNotEmpty() && now.isNotEmpty() && old != now && stored.startsWith(old)) now + stored.substring(old.length) else stored
+        return Playlist.rebaseOrigin(stored, old, now)
     }
 
     companion object {
+        internal fun rebaseOrigin(stored: String, old: String, now: String): String =
+            if (old.isNotEmpty() && now.isNotEmpty() && old != now && stored.startsWith(old) &&
+                (stored.length == old.length || stored[old.length] in charArrayOf('/', '?', '#'))) {
+                now + stored.substring(old.length)
+            } else stored
+
         fun from(o: JSONObject): Playlist {
             fun strings(key: String): List<String> {
                 val a = o.optJSONArray(key) ?: return emptyList()
