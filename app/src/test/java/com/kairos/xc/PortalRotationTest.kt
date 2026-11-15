@@ -44,4 +44,13 @@ class PortalRotationTest {
         val candidates = listOf("https://main.example", "https://backup.example")
         assertEquals(candidates[1], Portals.nextCandidate(candidates, candidates[0]) { it == candidates[0] })
     }
+
+    @Test
+    fun rebaseUrlMovesAQueuedStreamToTheSelectedHost() {
+        val url = "https://main.example/series/episode.ts?token=abc#part"
+        assertEquals(
+            "https://backup.example/series/episode.ts?token=abc#part",
+            Portals.rebaseUrl(url, "https://main.example", "https://backup.example"),
+        )
+    }
 }

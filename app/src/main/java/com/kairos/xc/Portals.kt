@@ -59,6 +59,14 @@ object Portals {
         } ?: ""
     }
 
+    fun rebase(p: Playlist, url: String): String =
+        rebaseUrl(url, playingOrigin(p, url), host(p))
+
+    internal fun rebaseUrl(url: String, old: String, current: String): String {
+        if (old.isEmpty() || current.isEmpty() || hostKey(old) == hostKey(current) || !url.startsWith(old, true)) return url
+        return current + url.substring(old.length)
+    }
+
     internal fun nextCandidate(candidates: List<String>, playing: String, bad: (String) -> Boolean): String? {
         if (candidates.size < 2) return null
         val current = candidates.indexOfFirst { hostKey(it) == hostKey(playing) }
