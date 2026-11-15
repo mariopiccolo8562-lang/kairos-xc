@@ -965,8 +965,9 @@ class PlayerActivity : BaseActivity() {
             val net = Net.type()
             if ((p.mode != "auto" && p.mode != "rot") || Portals.cands(p).size < 2 || decoderProblem || net == "none" || (net == "wifi" && Net.rssi() in -120..-76)) false
             else {
-                val oldOrigin = p.origin()
-                val switched = if (oldOrigin.isNotEmpty() && (live || vodUrl.startsWith(oldOrigin))) Portals.next(p) else null
+                val playingUrl = if (live) urls.getOrNull(urlIdx).orEmpty() else vodUrl
+                val oldOrigin = Portals.playingOrigin(p, playingUrl)
+                val switched = if (oldOrigin.isNotEmpty()) Portals.next(p, oldOrigin) else null
                 if (switched == null) false
                 else {
                     if (live) {

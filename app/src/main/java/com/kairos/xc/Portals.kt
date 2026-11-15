@@ -47,17 +47,34 @@ object Portals {
         return normalized.isNotEmpty() && Store.portalBadUntil(normalized) > System.currentTimeMillis()
     }
 
-    fun next(p: Playlist): Pair<String, String>? {
+    fun playingOrigin(p: Playlist, url: String): String = playingOrigin(cands(p), url)
+
+    internal fun playingOrigin(candidates: List<String>, url: String): String {
+        val urlOrigin = origin(url)
+        if (urlOrigin.isEmpty()) return ""
+        return candidates.firstOrNull { candidate ->
+            hostKey(candidate) == hostKey(urlOrigin) &&
+                url.startsWith(candidate, true) &&
+                (url.length == candidate.length || url[candidate.length] in charArrayOf('/', '?', '#'))
+        } ?: ""
+    }
+
+    internal fun nextCandidate(candidates: List<String>, playing: String, bad: (String) -> Boolean): String? {
+        if (candidates.size < 2) return null
+        val current = candidates.indexOfFirst { hostKey(it) == hostKey(playing) }
+        if (current < 0) return null
+        return (1..candidates.size).asSequence()
+            .map { candidates[(current + it) % candidates.size] }
+            .firstOrNull { !bad(it) }
+    }
+
+    fun next(p: Playlist, playing: String = host(p)): Pair<String, String>? {
         if (p.mode != "auto" && p.mode != "rot") return null
         val candidates = if (p.mode == "rot") PortalRotation.order(cands(p), Store.code) else cands(p)
         if (candidates.size < 2) return null
-        val old = host(p)
-        val current = candidates.indexOfFirst { hostKey(it) == hostKey(old) }
-        if (current < 0) return null
-        markBad(old, BAD_MS)
-        val next = (1..candidates.size).asSequence()
-            .map { candidates[(current + it) % candidates.size] }
-            .firstOrNull { !isBad(it) } ?: return null
+        val old = candidates.firstOrNull { hostKey(it) == hostKey(playing) } ?: return null
+        markBad(playing, BAD_MS)
+        val next = nextCandidate(candidates, playing, ::isBad) ?: return null
         Store.setPortalChoice(p.id, next)
         return old to next
     }

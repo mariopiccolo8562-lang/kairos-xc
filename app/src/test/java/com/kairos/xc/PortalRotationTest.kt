@@ -32,4 +32,16 @@ class PortalRotationTest {
         assertEquals(order[0], PortalRotation.pickProbed("rot", order, elapsed))
         assertEquals(order[1], PortalRotation.pickProbed("auto", order, elapsed))
     }
+
+    @Test
+    fun playingOriginFindsTheCandidateInTheCurrentStreamUrl() {
+        val candidates = listOf("https://main.example", "https://backup.example")
+        assertEquals(candidates[0], Portals.playingOrigin(candidates, "https://main.example/live/channel.ts"))
+    }
+
+    @Test
+    fun nextCandidateUsesPlayingHostWhenItIsAlreadyBad() {
+        val candidates = listOf("https://main.example", "https://backup.example")
+        assertEquals(candidates[1], Portals.nextCandidate(candidates, candidates[0]) { it == candidates[0] })
+    }
 }
