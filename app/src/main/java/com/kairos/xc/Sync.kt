@@ -6,6 +6,7 @@ import android.util.JsonReader
 import android.util.JsonToken
 import java.io.BufferedReader
 import java.io.InputStreamReader
+import java.net.URL
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executors
 
@@ -151,7 +152,7 @@ object Sync {
                     val st = Stmts(db, i * 1_000_000L + parts.indexOf(part) * 300_000L)
                     if (p.isXtream) xtream(p, st, part, step) else m3u(p, st, step)
                     db.setTransactionSuccessful()
-                    if (!p.isXtream) Store.setPlOrigin(p.id, p.origin())
+                    if (!p.isXtream) Store.setPlOrigin(p.id, try { Playlist.origin(URL(Playlist.fixUrl(p.url))) } catch (_: Exception) { "" })
                 } catch (t: Throwable) {
                     failed.add(p.id)
                     errors.add((if (pls.size > 1) p.name + ": " else "") + (t.message ?: t.javaClass.simpleName))
