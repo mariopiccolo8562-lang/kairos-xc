@@ -22,4 +22,55 @@ class PortalRotationTest {
         assertEquals(order[1], selected)
         assertTrue(PortalRotation.firstHealthy(candidates, code) { true } == null)
     }
+
+    @Test
+    fun rotProbeKeepsDeviceOrderWhileAutoProbeKeepsFastestHost() {
+        val candidates = listOf("main", "alt1", "alt2")
+        val order = PortalRotation.order(candidates, "DEVICE-123")
+        val elapsed = mapOf(order[1] to 10L, order[0] to 20L)
+
+        assertEquals(order[0], PortalRotation.pickProbed("rot", order, elapsed))
+        assertEquals(order[1], PortalRotation.pickProbed("auto", order, elapsed))
+    }
+
+    @Test
+    fun playingOriginFindsTheCandidateInTheCurrentStreamUrl() {
+        val candidates = listOf("https://main.example", "https://backup.example")
+        assertEquals(candidates[0], Portals.playingOrigin(candidates, "https://main.example/live/channel.ts"))
+    }
+
+    @Test
+    fun nextCandidateUsesPlayingHostWhenItIsAlreadyBad() {
+        val candidates = listOf("https://main.example", "https://backup.example")
+        assertEquals(candidates[1], Portals.nextCandidate(candidates, candidates[0]) { it == candidates[0] })
+    }
+
+    @Test
+    fun rebaseUrlMovesAQueuedStreamToTheSelectedHost() {
+        val url = "https://main.example/series/episode.ts?token=abc#part"
+        assertEquals(
+            "https://backup.example/series/episode.ts?token=abc#part",
+            Portals.rebaseUrl(url, "https://main.example", "https://backup.example"),
+        )
+    }
+
+    @Test
+    fun playlistRebaseOriginDoesNotRewriteAnAlreadyExtendedOrigin() {
+        assertEquals(
+            "http://tv.example:8080/s/1.mp4",
+            Playlist.rebaseOrigin(
+                "http://tv.example:8080/s/1.mp4",
+                "http://tv.example",
+                "http://tv.example:8080",
+            ),
+        )
+        assertEquals(
+            "http://tv.example:8080/s/1.mp4",
+            Playlist.rebaseOrigin(
+                "http://tv.example/s/1.mp4",
+                "http://tv.example",
+                "http://tv.example:8080",
+            ),
+        )
+    }
 }

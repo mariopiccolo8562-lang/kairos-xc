@@ -47,17 +47,42 @@ object Portals {
         return normalized.isNotEmpty() && Store.portalBadUntil(normalized) > System.currentTimeMillis()
     }
 
-    fun next(p: Playlist): Pair<String, String>? {
+    fun playingOrigin(p: Playlist, url: String): String = playingOrigin(cands(p), url)
+
+    internal fun playingOrigin(candidates: List<String>, url: String): String {
+        val urlOrigin = origin(url)
+        if (urlOrigin.isEmpty()) return ""
+        return candidates.firstOrNull { candidate ->
+            hostKey(candidate) == hostKey(urlOrigin) &&
+                url.startsWith(candidate, true) &&
+                (url.length == candidate.length || url[candidate.length] in charArrayOf('/', '?', '#'))
+        } ?: ""
+    }
+
+    fun rebase(p: Playlist, url: String): String =
+        rebaseUrl(url, playingOrigin(p, url), host(p))
+
+    internal fun rebaseUrl(url: String, old: String, current: String): String {
+        if (old.isEmpty() || current.isEmpty() || hostKey(old) == hostKey(current) || !url.startsWith(old, true)) return url
+        return current + url.substring(old.length)
+    }
+
+    internal fun nextCandidate(candidates: List<String>, playing: String, bad: (String) -> Boolean): String? {
+        if (candidates.size < 2) return null
+        val current = candidates.indexOfFirst { hostKey(it) == hostKey(playing) }
+        if (current < 0) return null
+        return (1..candidates.size).asSequence()
+            .map { candidates[(current + it) % candidates.size] }
+            .firstOrNull { !bad(it) }
+    }
+
+    fun next(p: Playlist, playing: String = host(p)): Pair<String, String>? {
         if (p.mode != "auto" && p.mode != "rot") return null
         val candidates = if (p.mode == "rot") PortalRotation.order(cands(p), Store.code) else cands(p)
         if (candidates.size < 2) return null
-        val old = host(p)
-        val current = candidates.indexOfFirst { hostKey(it) == hostKey(old) }
-        if (current < 0) return null
-        markBad(old, BAD_MS)
-        val next = (1..candidates.size).asSequence()
-            .map { candidates[(current + it) % candidates.size] }
-            .firstOrNull { !isBad(it) } ?: return null
+        val old = candidates.firstOrNull { hostKey(it) == hostKey(playing) } ?: return null
+        markBad(playing, BAD_MS)
+        val next = nextCandidate(candidates, playing, ::isBad) ?: return null
         Store.setPortalChoice(p.id, next)
         return old to next
     }
@@ -80,9 +105,9 @@ object Portals {
             val now = System.currentTimeMillis()
             if (now - Store.portalProbeAt(p.id) < PROBE_MS) continue
             val credentials = p.xt ?: continue
-            var best = ""
-            var fastest = Long.MAX_VALUE
-            for (candidate in candidates) {
+            val order = if (p.mode == "rot") PortalRotation.order(candidates, Store.code) else candidates
+            val elapsedByCandidate = linkedMapOf<String, Long>()
+            for (candidate in order) {
                 if (App.isPlayer(App.top)) break
                 if (isBad(candidate)) continue
                 val started = System.nanoTime()
@@ -94,11 +119,12 @@ object Portals {
                     val auth = info.opt("auth") ?: continue
                     if (auth == false || auth.toString() == "0" || auth.toString().equals("false", true)) continue
                     val elapsed = (System.nanoTime() - started) / 1_000_000L
-                    if (elapsed < fastest) { fastest = elapsed; best = candidate }
+                    elapsedByCandidate[candidate] = elapsed
+                    if (p.mode == "rot") break
                 } catch (_: Exception) {}
             }
             Store.setPortalProbeAt(p.id, System.currentTimeMillis())
-            if (best.isNotEmpty()) Store.setPortalChoice(p.id, best)
+            PortalRotation.pickProbed(p.mode, order, elapsedByCandidate)?.let { Store.setPortalChoice(p.id, it) }
         }
     }
 }
@@ -114,4 +140,8 @@ object PortalRotation {
 
     fun firstHealthy(candidates: List<String>, deviceCode: String, bad: (String) -> Boolean): String? =
         order(candidates, deviceCode).firstOrNull { !bad(it) }
+
+    fun pickProbed(mode: String, ordered: List<String>, elapsedByCandidate: Map<String, Long>): String? =
+        if (mode == "rot") ordered.firstOrNull { it in elapsedByCandidate }
+        else elapsedByCandidate.minByOrNull { it.value }?.key
 }

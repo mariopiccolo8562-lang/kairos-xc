@@ -912,7 +912,7 @@ class PlayerActivity : BaseActivity() {
         else i.putExtra("kind", kind).putExtra("id", vodId).putExtra("title", vodTitle)
             .putExtra("sub", vodSub).putExtra("url", fallbackUrl)
             .putExtra("pos", maxOf(player?.currentPosition ?: 0L, lastGoodPos))
-            .putExtra("recent", recent?.toString().orEmpty()).putExtra("queue", queue.toString())
+            .putExtra("recent", recent?.toString().orEmpty()).putExtra("queue", rebaseQueue(queue).toString())
         event(problem, "passato a VLC", "risolto", problemErr)
         problem = ""
         sendEvents()
@@ -921,6 +921,26 @@ class PlayerActivity : BaseActivity() {
         @Suppress("DEPRECATION")
         startActivityForResult(i, VLC_REQ)
         return true
+    }
+
+    private fun vodPlaylist(url: String, metadata: JSONObject?): Playlist? {
+        K.pl(metadata?.optString("pl").orEmpty())?.let { return it }
+        return K.playlists().firstOrNull { Portals.playingOrigin(it, url).isNotEmpty() }
+    }
+
+    private fun rebaseVodUrl(url: String, metadata: JSONObject?): String =
+        vodPlaylist(url, metadata)?.let { p -> Portals.rebase(p, p.fix(url)) } ?: url
+
+    private fun rebaseQueue(source: JSONArray): JSONArray = JSONArray().apply {
+        for (i in 0 until source.length()) {
+            val entry = source.optJSONObject(i)
+            if (entry == null) put(source.opt(i))
+            else {
+                val url = entry.optString("url")
+                val rebased = rebaseVodUrl(url, entry.optJSONObject("recent"))
+                put(if (rebased == url) entry else JSONObject(entry.toString()).put("url", rebased))
+            }
+        }
     }
 
     private fun applyFix(a: String): Boolean = when (a) {
@@ -948,17 +968,18 @@ class PlayerActivity : BaseActivity() {
             true
         }
         "server" -> {
-            val r = row
-            val p = r?.let { K.pl(it.s("pl")) }
+            val r = if (live) row else null
+            val p = if (live) r?.let { K.pl(it.s("pl")) } else vodPlaylist(vodUrl, recent)
             val net = Net.type()
-            if (r == null || p == null || (p.mode != "auto" && p.mode != "rot") || Portals.cands(p).size < 2 || decoderProblem || net == "none" || (net == "wifi" && Net.rssi() in -120..-76)) false
+            if (p == null || (live && r == null) || (p.mode != "auto" && p.mode != "rot") || Portals.cands(p).size < 2 || decoderProblem || net == "none" || (net == "wifi" && Net.rssi() in -120..-76)) false
             else {
-                val oldOrigin = p.origin()
-                val switched = if (oldOrigin.isNotEmpty() && (live || vodUrl.startsWith(oldOrigin))) Portals.next(p) else null
+                val playingUrl = if (live) urls.getOrNull(urlIdx).orEmpty() else vodUrl
+                val oldOrigin = Portals.playingOrigin(p, playingUrl)
+                val switched = if (oldOrigin.isNotEmpty()) Portals.next(p, oldOrigin) else null
                 if (switched == null) false
                 else {
                     if (live) {
-                        urls = Play.liveUrls(r)
+                        urls = Play.liveUrls(r!!)
                         urlIdx = urlIdx.coerceIn(0, (urls.size - 1).coerceAtLeast(0))
                     } else {
                         vodUrl = switched.second + vodUrl.substring(switched.first.length)
@@ -1508,8 +1529,8 @@ class PlayerActivity : BaseActivity() {
         vodId = n.optString("id")
         vodTitle = n.optString("title")
         vodSub = n.optString("sub")
-        vodUrl = n.optString("url")
         recent = n.optJSONObject("recent")
+        vodUrl = rebaseVodUrl(n.optString("url"), recent)
         startPos = Store.position(vodId)
         setSoft(false, null)
         startVod()
