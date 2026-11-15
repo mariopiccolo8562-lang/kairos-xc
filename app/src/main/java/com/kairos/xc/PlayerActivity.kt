@@ -24,6 +24,7 @@ import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.ui.PlayerView
 import org.json.JSONArray
 import org.json.JSONObject
+import java.net.URL
 import java.util.Locale
 
 /** Indirizzi dei contenuti, sempre con il server attuale della playlist (cambio DNS dal pannello) */
@@ -948,17 +949,28 @@ class PlayerActivity : BaseActivity() {
             true
         }
         "server" -> {
-            val r = row
-            val p = r?.let { K.pl(it.s("pl")) }
+            val r = if (live) row ?: return false else null
+            val p = if (live) K.pl(r!!.s("pl")) else {
+                K.pl(recent?.optString("pl") ?: "") ?: run {
+                    val vodOrigin = try { Playlist.origin(URL(Playlist.fixUrl(vodUrl))) } catch (_: Exception) { "" }
+                    if (vodOrigin.isEmpty()) null else K.playlists().firstOrNull { candidatePlaylist ->
+                        Portals.cands(candidatePlaylist).any { candidate ->
+                            val candidateOrigin = try { Playlist.origin(URL(Playlist.fixUrl(candidate))) } catch (_: Exception) { "" }
+                            candidateOrigin == vodOrigin && vodUrl.startsWith(candidate, ignoreCase = true) &&
+                                (vodUrl.length == candidate.length || vodUrl[candidate.length] in charArrayOf('/', '?', '#'))
+                        }
+                    }
+                }
+            } ?: return false
             val net = Net.type()
-            if (r == null || p == null || (p.mode != "auto" && p.mode != "rot") || Portals.cands(p).size < 2 || decoderProblem || net == "none" || (net == "wifi" && Net.rssi() in -120..-76)) false
+            if ((p.mode != "auto" && p.mode != "rot") || Portals.cands(p).size < 2 || decoderProblem || net == "none" || (net == "wifi" && Net.rssi() in -120..-76)) false
             else {
                 val oldOrigin = p.origin()
                 val switched = if (oldOrigin.isNotEmpty() && (live || vodUrl.startsWith(oldOrigin))) Portals.next(p) else null
                 if (switched == null) false
                 else {
                     if (live) {
-                        urls = Play.liveUrls(r)
+                        urls = Play.liveUrls(r!!)
                         urlIdx = urlIdx.coerceIn(0, (urls.size - 1).coerceAtLeast(0))
                     } else {
                         vodUrl = switched.second + vodUrl.substring(switched.first.length)
