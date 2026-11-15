@@ -80,9 +80,9 @@ object Portals {
             val now = System.currentTimeMillis()
             if (now - Store.portalProbeAt(p.id) < PROBE_MS) continue
             val credentials = p.xt ?: continue
-            var best = ""
-            var fastest = Long.MAX_VALUE
-            for (candidate in candidates) {
+            val order = if (p.mode == "rot") PortalRotation.order(candidates, Store.code) else candidates
+            val elapsedByCandidate = linkedMapOf<String, Long>()
+            for (candidate in order) {
                 if (App.isPlayer(App.top)) break
                 if (isBad(candidate)) continue
                 val started = System.nanoTime()
@@ -94,11 +94,12 @@ object Portals {
                     val auth = info.opt("auth") ?: continue
                     if (auth == false || auth.toString() == "0" || auth.toString().equals("false", true)) continue
                     val elapsed = (System.nanoTime() - started) / 1_000_000L
-                    if (elapsed < fastest) { fastest = elapsed; best = candidate }
+                    elapsedByCandidate[candidate] = elapsed
+                    if (p.mode == "rot") break
                 } catch (_: Exception) {}
             }
             Store.setPortalProbeAt(p.id, System.currentTimeMillis())
-            if (best.isNotEmpty()) Store.setPortalChoice(p.id, best)
+            PortalRotation.pickProbed(p.mode, order, elapsedByCandidate)?.let { Store.setPortalChoice(p.id, it) }
         }
     }
 }
@@ -114,4 +115,8 @@ object PortalRotation {
 
     fun firstHealthy(candidates: List<String>, deviceCode: String, bad: (String) -> Boolean): String? =
         order(candidates, deviceCode).firstOrNull { !bad(it) }
+
+    fun pickProbed(mode: String, ordered: List<String>, elapsedByCandidate: Map<String, Long>): String? =
+        if (mode == "rot") ordered.firstOrNull { it in elapsedByCandidate }
+        else elapsedByCandidate.minByOrNull { it.value }?.key
 }

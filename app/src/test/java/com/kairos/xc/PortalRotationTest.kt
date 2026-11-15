@@ -22,4 +22,14 @@ class PortalRotationTest {
         assertEquals(order[1], selected)
         assertTrue(PortalRotation.firstHealthy(candidates, code) { true } == null)
     }
+
+    @Test
+    fun rotProbeKeepsDeviceOrderWhileAutoProbeKeepsFastestHost() {
+        val candidates = listOf("main", "alt1", "alt2")
+        val order = PortalRotation.order(candidates, "DEVICE-123")
+        val elapsed = mapOf(order[1] to 10L, order[0] to 20L)
+
+        assertEquals(order[0], PortalRotation.pickProbed("rot", order, elapsed))
+        assertEquals(order[1], PortalRotation.pickProbed("auto", order, elapsed))
+    }
 }
