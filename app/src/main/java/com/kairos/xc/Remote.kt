@@ -162,6 +162,8 @@ object Remote {
     /** risposta del battito (thread di rete): configurazione e comandi */
     fun onBeat(j: JSONObject) {
         if (j.has("rc")) applyRaw(j.optString("rc"), j.optString("rcv"))
+        // «Pulizia automatica» del pannello (voce «clean», ogni tot giorni): mai mentre si guarda (vedi AutoClean)
+        try { AutoClean.tick(App.I, str("clean"), Pulse.watching != null || App.isPlayer(App.top)) } catch (_: Throwable) {}
         // «Invia aggiornamento» dal pannello (o aggiornamento automatico scelto dal fornitore)
         val upd = j.optLong("upd", 0)
         if (upd > 0 && upd != Store.updSeen) { Store.updSeen = upd; Updater.fromPanel() }
