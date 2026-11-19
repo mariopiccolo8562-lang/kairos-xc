@@ -677,7 +677,7 @@ class PlayerActivity : BaseActivity() {
     /**
      * rotellina che gira «a singhiozzo»: il caricamento si ferma e riparte per un attimo di continuo, così [checkStall]
      * (12 s di caricamento di fila) non scatta mai. Qui si contano i secondi in cui il video non va avanti; bastano 5 s di
-     * visione buona per azzerarli. Oltre 10 s (15 all'avvio) è un blocco lungo: altro formato, versione più leggera, poi ricarica
+     * visione buona per azzerarli. Oltre 4 s (10 all'avvio) è un blocco lungo: altro formato, versione più leggera, poi ricarica
      */
     private fun checkStuck() {
         val p = player ?: return
@@ -687,7 +687,7 @@ class PlayerActivity : BaseActivity() {
             return
         }
         playSec = 0
-        val limit = if (firstReady) 10 else 15
+        val limit = if (firstReady) 4 else 10
         if (++stuckSec < limit) return
         stuckSec = 0
         bufferingSince = 0L
