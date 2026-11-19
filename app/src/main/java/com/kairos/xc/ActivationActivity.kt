@@ -19,6 +19,7 @@ class ActivationActivity : BaseActivity() {
     private lateinit var hero: TextView
     private var routed = false
     private var privacyShown = false
+    private var updFocused = false
     private var alive = false
     private val poll = Runnable { tick() }
 
@@ -86,13 +87,20 @@ class ActivationActivity : BaseActivity() {
         if (isFinishing || routed) return
         when (s.status) {
             "active" -> { route(); return }
-            "maintenance" -> say(s.maintMsg.ifEmpty { "Servizio in manutenzione: torna disponibile tra poco." } + "\nL'app riparte da sola appena finisce.", true)
+            "maintenance" -> if (s.updLock.isNotEmpty()) say(s.maintMsg.ifEmpty { "Il tuo fornitore comunica: aggiornamento obbligatorio.\nVersione nuova: ${s.updLock}" } + "\nPremi «Aggiorna ora»: l'app scarica la versione nuova, poi conferma «Installa».", true)
+                else say(s.maintMsg.ifEmpty { "Servizio in manutenzione: torna disponibile tra poco." } + "\nL'app riparte da sola appena finisce.", true)
             "locked" -> say("Questo codice è già usato da un altro dispositivo. Chiedi al tuo fornitore di sbloccarlo dal pannello.", true)
             "expired" -> say("Abbonamento scaduto il ${Ui.date(s.expires)}." + contact(s), true)
             "disabled" -> say("Abbonamento sospeso dal fornitore." + contact(s), true)
             else -> say("In attesa di attivazione…", false)
         }
-        hero.text = if (s.status == "maintenance") "Manutenzione in corso." else "Attiva la tua TV."
+        // blocco totale dell'aggiornamento: un tasto solo, «Aggiorna ora», già a fuoco
+        val mustUpd = s.status == "maintenance" && s.updLock.isNotEmpty()
+        hero.text = if (mustUpd) "Aggiornamento obbligatorio." else if (s.status == "maintenance") "Manutenzione in corso." else "Attiva la tua TV."
+        retry.text = if (mustUpd) "Aggiorna ora" else "Riprova adesso"
+        retry.setOnClickListener { if (mustUpd) Updater.now(this) else tick() }
+        if (mustUpd && !updFocused) { updFocused = true; retry.requestFocus() }
+        if (!mustUpd) updFocused = false
         findViewById<View>(R.id.codeBox).visibility = if (s.status == "maintenance") View.GONE else View.VISIBLE
         if (!Store.privacyOk && Remote.privacy != "skip" && !privacyShown && s.status != "maintenance") { privacyShown = true; showPrivacy() }
         // in attesa ogni 12 s (come KAIROS TV); bloccato, scaduto o sospeso: ogni minuto

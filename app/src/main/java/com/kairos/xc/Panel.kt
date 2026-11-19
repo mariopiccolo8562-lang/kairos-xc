@@ -135,6 +135,12 @@ class State(
      * cliente non può toccarla. Al tocco l'app dice «VPN gestita dal fornitore». Assente = pannello che non la manda.
      */
     val vpnShield: Boolean = false,
+    /**
+     * «Blocco totale» dell'aggiornamento (pannello, 19 novembre 2026): versione che va installata per rientrare. Arriva con lo
+     * stato «maintenance» quando l'app è più vecchia dell'ultima pubblicata: la schermata mostra «Aggiornamento obbligatorio» e
+     * il tasto «Aggiorna ora». Vuota = manutenzione vera, o pannello che non la manda.
+     */
+    val updLock: String = "",
 ) {
     val active: Boolean get() = status == "active"
     fun perm(k: String): Boolean = perms?.optBoolean(k, true) ?: true
@@ -164,6 +170,7 @@ class State(
                 j.optString("maintMsg"),
                 j.optString("af"),
                 vpnShield = vpn?.optBoolean("shield") == true,
+                updLock = j.optJSONObject("updLock")?.optString("version", "").orEmpty(),
             )
         }
         fun locked() = State("locked", "", "", JSONObject(), emptyList(), emptyList(), null, "off", "", null)

@@ -369,6 +369,34 @@ object Updater {
         }
     }
 
+    /**
+     * «Aggiorna ora» dalla schermata del blocco totale: cerca la versione nuova e la scarica e installa subito, con la barra a
+     * video. Vale anche su rete a consumo (il cliente l'ha chiesto) e non dipende dallo stato dell'abbonamento: il file degli
+     * aggiornamenti è pubblico.
+     */
+    fun now(a: Activity) {
+        if (busy.get()) { installWhenReady = true; Ui.toast("La versione nuova si sta già scaricando: l'installazione parte appena è pronta"); return }
+        Ui.toast("Cerco la versione nuova…")
+        bg {
+            val apk = try { Panel.update()?.optJSONObject("apk") } catch (_: Exception) { null }
+            val code = apk?.optInt("versionCode", 0) ?: 0
+            val url = apk?.optString("url", "") ?: ""
+            val ver = apk?.optString("version", "") ?: ""
+            ui {
+                if (a.isFinishing) return@ui
+                if (code > BuildConfig.VERSION_CODE && url.startsWith("https://")) {
+                    val u = Upd(code, ver, url)
+                    firstSeen(u)
+                    if (pending?.code != code) { ready = null; prefetchFailed = 0 }
+                    pending = u
+                    Store.saveUpd(u.code, u.ver, u.url)
+                    staged(u)?.let { ready = it }
+                    download(a, url)
+                } else Ui.toast(if (apk == null) "Non riesco a scaricare adesso: controlla la connessione e riprova" else "Hai già l'ultima versione: chiudi e riapri l'app")
+            }
+        }
+    }
+
     fun download(a: Activity, url: String) {
         // già scaricato in background: si passa subito all'installazione
         val u = pending
