@@ -142,6 +142,9 @@ class PlayerActivity : BaseActivity() {
     private var blocked = false
     private var reconnects = 0
     private var bufferingSince = 0L
+    /** secondi senza video che va avanti (rotellina, attese brevi a ripetizione): si azzera dopo 5 s di visione buona */
+    private var stuckSec = 0
+    private var playSec = 0
     private val events = JSONArray()
 
     // recupero automatico (Kairos Adaptive §6): blocchi, immagine ferma, errore del lettore
@@ -308,6 +311,7 @@ class PlayerActivity : BaseActivity() {
         override fun run() {
             updateTime()
             checkStall()
+            checkStuck()
             checkFreeze()
             checkSlow()
             checkResolved()
@@ -539,7 +543,7 @@ class PlayerActivity : BaseActivity() {
                     if (live) {
                         // il flusso si è chiuso: si ricollega, ma con pause sempre più lunghe e al massimo 5 volte
                         if (reconnects < 5 && !blocked) { reconnects++; App.main.postDelayed(retryR, 1500L * reconnects) }
-                        else { hideSpin(); showMsg("Il canale si interrompe continuamente.\nProva più tardi o scegli un altro canale.") }
+                        else if (!blocked) { reconnects = 0; recover("error", "il flusso si chiude di continuo") }
                     } else {
                         val p = player
                         val d = p?.duration ?: 0L
@@ -668,6 +672,29 @@ class PlayerActivity : BaseActivity() {
     private fun stopCushion() {
         App.main.removeCallbacks(cushionR)
         if (cushioning) { cushioning = false; player?.playWhenReady = true }
+    }
+
+    /**
+     * rotellina che gira «a singhiozzo»: il caricamento si ferma e riparte per un attimo di continuo, così [checkStall]
+     * (12 s di caricamento di fila) non scatta mai. Qui si contano i secondi in cui il video non va avanti; bastano 5 s di
+     * visione buona per azzerarli. Oltre 10 s (15 all'avvio) è un blocco lungo: altro formato, versione più leggera, poi ricarica
+     */
+    private fun checkStuck() {
+        val p = player ?: return
+        if (!live || blocked || kicked || gaveUp || cushioning || seeking || !p.playWhenReady || p.playbackState == Player.STATE_ENDED || p.playbackState == Player.STATE_IDLE) { stuckSec = 0; playSec = 0; return }
+        if (p.isPlaying) {
+            if (++playSec >= 5) stuckSec = 0
+            return
+        }
+        playSec = 0
+        val limit = if (firstReady) 10 else 15
+        if (++stuckSec < limit) return
+        stuckSec = 0
+        bufferingSince = 0L
+        stallsHour.add(mono()); lastStallAt = mono()
+        if (firstReady) Line.stall(stallKey())
+        if (problem == "stall" && !longStall) { event(problem, lastAction.ifEmpty { "nessuna" }, "chiuso", problemErr); problem = ""; fixAt = 0L }
+        recover("stall", if (firstReady) "rotellina per oltre $limit s" else "avvio lento", long = true)
     }
 
     /** un blocco di oltre 12 s in diretta (20 nei film) o un avvio di oltre 20 s, solo mentre il lettore sta davvero caricando */
@@ -866,7 +893,7 @@ class PlayerActivity : BaseActivity() {
         if (fresh && kind == "stall" && reduced && reducedByLine && switchLighter(byLine = true)) { lastAction = "versione più leggera"; fixAt = now; return }
         val ladder = if (live) when (problem) {
             "freeze" -> if (Line.device() == "D" || problemErr == "immagine a scatti") listOf("reload", "lighter", "alt", "soft") else listOf("reload", "soft", "alt", "lighter")
-            "stall" -> if (longStall) listOf("reload", "server", "alt", "lighter") else listOf("lighter", "alt", "cushion")
+            "stall" -> if (longStall) listOf("alt", "lighter", "reload", "server") else listOf("lighter", "alt", "cushion")
             else -> listOf("reload", "server", "alt", "soft", "lighter")
         } else when (problem) {
             "stall" -> if (longStall) listOf("reload", "server", "reload") else listOf("cushion", "cushion")
@@ -1367,6 +1394,7 @@ class PlayerActivity : BaseActivity() {
         fmt = if (Players.isHls(u, forceHls)) "hls" else if (live) "ts" else "vod"
         bwMs = 0L; bwBytes = 0L
         startAt = mono(); playStartAt = 0L; ttff = -1L; fill = -1.0; fillT0 = 0L
+        stuckSec = 0; playSec = 0
         bufferingSince = startAt // il tempo di avvio si conta da qui (il lettore può restare in caricamento)
         firstReady = false
         gaveUp = false
