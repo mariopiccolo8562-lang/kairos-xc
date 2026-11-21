@@ -38,6 +38,146 @@ object Epg {
     private const val BUILD_MS = 8 * 60 * 60_000L
     private const val BATCH = 500
 
+    /* ---- Guida TV di riserva (dalla KAIROS HEAVY, 21 novembre 2026: il titolare, «gli epg non vanno a tutti i canali… puoi
+       prenderli altrove oltre che alla sorgente del fornitore?») ----
+       Due guide pubbliche italiane in formato XMLTV. Servono solo ai canali rimasti SENZA programmi dopo le guide del
+       fornitore (si riconoscono dal nome del canale); la seconda si scarica solo se la prima non risponde. Parte anche quando
+       la guida del fornitore non si scarica. Dal pannello: voce «Guida TV di riserva» («epg2»), accesa di serie. */
+    private val BACKUP_GUIDES = listOf(
+        "https://epgshare01.online/epgshare01/epg_ripper_IT1.xml.gz",
+        "http://www.epgitalia.tv/gzip",
+    )
+    private fun backupUrls(): List<String> =
+        if (!App.lite && Remote.player("epg2", "on") != "off") BACKUP_GUIDES else emptyList()
+
+    private var backupQueued = false
+    private var backupTries = 0
+
+    /** la guida di riserva è un lavoro a parte, DOPO quella del fornitore: se viene interrotta non rovina niente */
+    private fun scheduleBackup(pls: List<Playlist>, delayMs: Long) {
+        if (pls.isEmpty() || backupUrls().isEmpty()) return
+        synchronized(scheduleLock) { if (backupQueued) return; backupQueued = true }
+        try { worker.schedule({ runBackup(pls) }, delayMs, TimeUnit.MILLISECONDS) } catch (_: Throwable) { synchronized(scheduleLock) { backupQueued = false } }
+    }
+
+    private fun runBackup(pls: List<Playlist>) {
+        synchronized(scheduleLock) { backupQueued = false }
+        val urls = backupUrls()
+        if (urls.isEmpty()) return
+        val ids = pls.map { it.id }
+        if (K.activeIds().toSet() != ids.toSet()) return
+        // una volta per ogni guida del fornitore costruita (o ogni 8 ore se il fornitore non ne ha)
+        val key = Store.epgSourceSig + ":" + Store.epgBuiltAt
+        val sp = App.I.getSharedPreferences("epg2", android.content.Context.MODE_PRIVATE)
+        if (sp.getString("epg2Key", "") == key && System.currentTimeMillis() - sp.getLong("epg2At", 0L) in 0 until BUILD_MS) return
+        if (deferMs() > 0L) { scheduleBackup(pls, 120_000L); return }
+        when (try { buildBackup(ids, urls) } catch (_: Throwable) { BuildResult.FAILED }) {
+            BuildResult.DONE -> {
+                backupTries = 0
+                sp.edit().putString("epg2Key", key).putLong("epg2At", System.currentTimeMillis()).apply()
+                storeCache.evictAll(); rowCache.evictAll()
+            }
+            // visione iniziata nel frattempo: si riprova più tardi, la guida del fornitore resta com'è
+            BuildResult.ABORTED -> scheduleBackup(pls, 120_000L)
+            // nessuna delle due guide di riserva ha risposto: tre nuovi tentativi, uno ogni mezz'ora
+            BuildResult.FAILED -> if (++backupTries <= 3) scheduleBackup(pls, 30 * 60_000L)
+        }
+    }
+
+    /**
+     * Legge la prima guida di riserva che risponde e aggiunge i programmi SOLO ai canali che non ne hanno (riconosciuti
+     * dall'ID o dal nome). Passa da «prog_stage»: nella guida vera entra tutto insieme alla fine, o niente.
+     */
+    private fun buildBackup(ids: List<String>, urls: List<String>): BuildResult {
+        fun busy() = App.memTight || App.isPlayer(App.top) || Players.previewing || Sync.running
+        if (busy()) return BuildResult.ABORTED
+        if (Net.type() == "none") return BuildResult.FAILED
+        val channels = Db.epgChannels(ids)
+        if (channels.isEmpty()) return BuildResult.DONE
+        val idMap = HashMap<String, MutableSet<String>>()
+        val nameMap = HashMap<String, MutableSet<String>>()
+        for (channel in channels) {
+            val epgId = channel.epg.trim().lowercase(java.util.Locale.ROOT)
+            val nameKey = EpgName.key(channel.name)
+            val key = when {
+                epgId.isNotEmpty() -> "id:$epgId"
+                nameKey.isNotEmpty() -> "n:$nameKey"
+                else -> ""
+            }
+            if (epgId.isNotEmpty()) idMap.getOrPut(epgId) { LinkedHashSet() }.add(key)
+            if (nameKey.isNotEmpty()) nameMap.getOrPut(nameKey) { LinkedHashSet() }.add(key)
+        }
+        val index = XmltvIndex(idMap, nameMap)
+        val db = Db.w
+        // canali che hanno già la guida del fornitore: non si toccano
+        val covered = HashSet<String>()
+        db.rawQuery("SELECT DISTINCT ch FROM prog", null).use { c -> while (c.moveToNext()) covered.add(c.getString(0) ?: "") }
+        val limiter = XmltvLimiter(perChannel = 60, total = 16_000)
+        limiter.seal(covered)
+        val now = System.currentTimeMillis() / 1000L
+        var inserted = 0
+        var loaded = false
+        fun clearStage() { try { db.delete("prog_stage", null, null) } catch (_: Throwable) {} }
+        clearStage()
+        val insert = db.compileStatement("INSERT OR IGNORE INTO prog_stage(ch, start, stop, title, descr) VALUES(?,?,?,?,?)")
+        try {
+            for (url in urls) {
+                if (busy() || K.activeIds().toSet() != ids.toSet()) { clearStage(); return BuildResult.ABORTED }
+                var inTransaction = false
+                var batch = 0
+                val connection = try { Http.open(url, connectMs = 12_000, readMs = 20_000) } catch (_: Throwable) { continue }
+                try {
+                    if (connection.responseCode != 200) continue
+                    var checks = 0
+                    XmltvParser.parse(
+                        Http.stream(connection),
+                        android.util.Xml.newPullParser(),
+                        index,
+                        now - 2 * 3600L,
+                        now + 24 * 3600L,
+                        stopAtLimit = { limiter.full },
+                        shouldAbort = { checks++; busy() || (checks % 128 == 0 && K.activeIds().toSet() != ids.toSet()) },
+                    ) { programme ->
+                        if (!limiter.accept(programme.channel, programme.start)) return@parse
+                        if (!inTransaction) { db.beginTransactionNonExclusive(); inTransaction = true }
+                        insert.clearBindings()
+                        insert.bindString(1, programme.channel)
+                        insert.bindLong(2, programme.start)
+                        insert.bindLong(3, programme.stop)
+                        insert.bindString(4, programme.title)
+                        insert.bindString(5, programme.description)
+                        if (insert.executeInsert() >= 0L) { inserted++; batch++ }
+                        if (batch >= BATCH) { db.setTransactionSuccessful(); db.endTransaction(); inTransaction = false; batch = 0 }
+                    }
+                    if (inTransaction) { db.setTransactionSuccessful(); db.endTransaction(); inTransaction = false }
+                    loaded = true
+                } catch (_: XmltvAborted) {
+                    if (inTransaction) { try { db.endTransaction() } catch (_: Throwable) {}; inTransaction = false }
+                    clearStage()
+                    return BuildResult.ABORTED
+                } catch (_: Throwable) {
+                    // questa guida si è rotta a metà: si butta quello che aveva dato e si prova l'altra
+                    if (inTransaction) { try { db.endTransaction() } catch (_: Throwable) {}; inTransaction = false }
+                    clearStage()
+                    inserted = 0
+                } finally { try { connection.disconnect() } catch (_: Throwable) {} }
+                if (loaded) break
+            }
+        } finally { try { insert.close() } catch (_: Throwable) {} }
+        if (!loaded) { clearStage(); return BuildResult.FAILED }
+        if (busy()) { clearStage(); return BuildResult.ABORTED }
+        if (inserted > 0) {
+            db.beginTransactionNonExclusive()
+            try {
+                db.execSQL("INSERT OR IGNORE INTO prog(ch, start, stop, title, descr) SELECT ch, start, stop, title, descr FROM prog_stage")
+                db.delete("prog_stage", null, null)
+                db.setTransactionSuccessful()
+            } finally { db.endTransaction() }
+        }
+        return BuildResult.DONE
+    }
+
+
     fun channelKeys(epg: String, name: String): List<String> = buildList(2) {
         epg.trim().lowercase(java.util.Locale.ROOT).takeIf { it.isNotEmpty() }?.let { add("id:$it") }
         EpgName.key(name).takeIf { it.isNotEmpty() }?.let { add("n:$it") }
@@ -204,7 +344,8 @@ object Epg {
             return
         }
         val sources = sourceUrls(pls)
-        if (sources.isEmpty()) { finish(pls); return }
+        // nessuna guida del fornitore (lista M3U): resta la guida di riserva
+        if (sources.isEmpty()) { scheduleBackup(pls, 4_000L); finish(pls); return }
         val now = System.currentTimeMillis()
         if (failedSignature == "unavailable" && now < retryAt) {
             worker.schedule({ runPending() }, retryAt - now, TimeUnit.MILLISECONDS)
@@ -226,6 +367,7 @@ object Epg {
         val signatureNow = System.currentTimeMillis()
         if (Store.epgSourceSig == sourceSignature && Store.epgBuiltAt > 0L && signatureNow - Store.epgBuiltAt < BUILD_MS) {
             prefetchCurrent(pls)
+            scheduleBackup(pls, 4_000L)
             finish(pls)
             return
         }
@@ -235,12 +377,13 @@ object Epg {
         }
         prefetchCurrent(pls)
         when (build(pls, sourceSignature, channels)) {
-            BuildResult.DONE -> { failedSignature = ""; retryAt = 0L; finish(pls) }
+            BuildResult.DONE -> { failedSignature = ""; retryAt = 0L; scheduleBackup(pls, 4_000L); finish(pls) }
             BuildResult.ABORTED -> worker.schedule({ runPending() }, 30, TimeUnit.SECONDS)
             BuildResult.FAILED -> {
                 failedSignature = sourceSignature
                 retryAt = System.currentTimeMillis() + 30 * 60_000L
                 worker.schedule({ runPending() }, 30, TimeUnit.MINUTES)
+                scheduleBackup(pls, 4_000L) // la guida del fornitore non si è scaricata: la riserva copre i canali senza programmi
             }
         }
     }

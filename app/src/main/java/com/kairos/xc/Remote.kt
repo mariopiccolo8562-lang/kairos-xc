@@ -37,6 +37,7 @@ object Remote {
     private val playerValues = mapOf(
         // locandine dei titoli di tendenza dentro i cerchi della Home (13 novembre 2026)
         "o.homeArt" to listOf("on", "off"),
+        "epg2" to listOf("on", "off"), // «Guida TV di riserva» (21 novembre 2026), accesa di serie
         "o.engLive" to listOf("auto", "exo", "vlc"),
         "o.engMovie" to listOf("auto", "exo", "vlc"),
         "o.engSeries" to listOf("auto", "exo", "vlc"),

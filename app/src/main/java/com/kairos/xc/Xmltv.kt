@@ -62,8 +62,14 @@ class XmltvLimiter(
         private set
     val full: Boolean get() = size >= total
 
+    private val sealed = HashSet<String>()
+    /** da qui in poi (guida di riserva) si accettano solo i canali che non hanno ancora nessun programma */
+    fun seal() { sealed.addAll(counts.keys) }
+    /** canali da non toccare (hanno già i programmi di un'altra fonte) */
+    fun seal(keys: Collection<String>) { sealed.addAll(keys) }
+
     fun accept(channel: String, start: Long): Boolean {
-        if (full) return false
+        if (full || channel in sealed) return false
         val channelStarts = starts.getOrPut(channel) { HashSet() }
         if (start in channelStarts || (counts[channel] ?: 0) >= perChannel) return false
         channelStarts.add(start)
