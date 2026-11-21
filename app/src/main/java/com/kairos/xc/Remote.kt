@@ -224,6 +224,8 @@ object Remote {
             when (c) {
                 "reload" -> close(id, "riavvio") { restart() }
                 "cache" -> close(id, "cache svuotata", { clearAll() }) { restart() }
+                // «Ripristina impostazioni default» dal pannello: le scelte del cliente tornano quelle di serie, poi l'app si riapre
+                "defaults" -> close(id, "impostazioni di base ripristinate", { Store.resetSettings() }) { restart() }
                 // prima il battito «vado in sfondo» (al massimo 1,5 s di attesa), poi si chiude
                 "exit" -> close(id, "chiusa") { Pulse.leave(1_500) { quit() } }
                 // in silenzio: niente avanzamento né errori a video (vedi Sync.quiet)

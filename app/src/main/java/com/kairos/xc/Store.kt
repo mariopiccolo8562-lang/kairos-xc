@@ -282,4 +282,16 @@ object Store {
     fun setDlMirrors(v: List<String>) {
         try { if (v.joinToString("\n") != (p.getString("dl_mirrors", "") ?: "")) p.edit().putString("dl_mirrors", v.joinToString("\n")).apply() } catch (_: Exception) {}
     }
+
+    /**
+     * «Ripristina impostazioni default» dal pannello (21 novembre 2026): le scelte fatte dal cliente nelle Impostazioni
+     * (opzioni del lettore, liteMode, bgUpdate, previewMode) tornano quelle di serie. Restano codice, playlist, preferiti, cronologia, posizioni, PIN e
+     * controllo genitori, VPN e guida esterna. Scritto subito sul disco: subito dopo l'app si riavvia.
+     */
+    private val RESET_KEYS = setOf("liteMode", "bgUpdate", "previewMode")
+    fun resetSettings() {
+        val e = p.edit()
+        for (k in p.all.keys) if (k.startsWith("player_") || k in RESET_KEYS) { e.remove(k) }
+        e.commit()
+    }
 }
