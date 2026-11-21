@@ -144,6 +144,8 @@ class PlayerActivity : BaseActivity() {
     private var bufferingSince = 0L
     /** secondi senza video che va avanti (rotellina, attese brevi a ripetizione): si azzera dopo 5 s di visione buona */
     private var stuckSec = 0
+    /** rotellina a singhiozzo: niente conteggio fino a quest'ora (orologio monotono), dopo un cambio di fonte (21 novembre 2026) */
+    private var stuckQuietUntil = 0L
     private var playSec = 0
     private val events = JSONArray()
 
@@ -677,7 +679,7 @@ class PlayerActivity : BaseActivity() {
     /**
      * rotellina che gira «a singhiozzo»: il caricamento si ferma e riparte per un attimo di continuo, così [checkStall]
      * (12 s di caricamento di fila) non scatta mai. Qui si contano i secondi in cui il video non va avanti; bastano 5 s di
-     * visione buona per azzerarli. Oltre 4 s (10 all'avvio) è un blocco lungo: altro formato, versione più leggera, poi ricarica
+     * visione buona per azzerarli. Oltre 10 s è un blocco lungo (dopo un cambio di fonte 20 s di pausa): altro formato, versione più leggera, poi ricarica
      */
     private fun checkStuck() {
         val p = player ?: return
@@ -687,13 +689,18 @@ class PlayerActivity : BaseActivity() {
             return
         }
         playSec = 0
-        val limit = if (firstReady) 4 else 10
+        // 21 novembre 2026: 10 s, e per 20 s dopo un cambio di fonte non si conta (come Kairos Pro 2.8.18 e KAIROS HEAVY 1.0.13).
+        // Con 4 s fissi (19 novembre) i cambi si rincorrevano: ogni cambio apre una connessione nuova, il server tiene occupata
+        // per qualche secondo quella vecchia e la visione si bloccava di continuo
+        if (firstReady && mono() < stuckQuietUntil) { stuckSec = 0; return }
+        val limit = 10
         if (++stuckSec < limit) return
         stuckSec = 0
         bufferingSince = 0L
         stallsHour.add(mono()); lastStallAt = mono()
         if (firstReady) Line.stall(stallKey())
         if (problem == "stall" && !longStall) { event(problem, lastAction.ifEmpty { "nessuna" }, "chiuso", problemErr); problem = ""; fixAt = 0L }
+        if (firstReady) stuckQuietUntil = mono() + 20_000L
         recover("stall", if (firstReady) "rotellina per oltre $limit s" else "avvio lento", long = true)
     }
 
