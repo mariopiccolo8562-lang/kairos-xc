@@ -48,7 +48,9 @@ object Epg {
         "http://www.epgitalia.tv/gzip",
     )
     private fun backupUrls(): List<String> =
-        if (!App.lite && Remote.player("epg2", "on") != "off") BACKUP_GUIDES else emptyList()
+        // saltata solo con «Leggerissima»: la lettura è a flusso, con un tetto di programmi, e si ferma da sola quando Android
+        // chiede memoria (con «!App.lite» molte Fire Stick sarebbero rimaste senza)
+        if (!App.max && Remote.player("epg2", "on") != "off") BACKUP_GUIDES else emptyList()
 
     private var backupQueued = false
     private var backupTries = 0
