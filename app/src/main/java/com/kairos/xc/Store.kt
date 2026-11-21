@@ -13,9 +13,11 @@ object Store {
     private lateinit var pos: SharedPreferences
 
     fun init(c: Context) {
+        Vault.init(c)
         p = c.getSharedPreferences("lite", Context.MODE_PRIVATE)
         pos = c.getSharedPreferences("lite_pos", Context.MODE_PRIVATE)
         if ((p.getString("code", "") ?: "").isEmpty() || (p.getString("secret", "") ?: "").isEmpty()) newIdentity(c)
+        migrateVault()
     }
 
     /**
@@ -50,11 +52,42 @@ object Store {
     val code: String get() = p.getString("code", "") ?: ""
     val secret: String get() = p.getString("secret", "") ?: ""
 
-    private fun s(k: String, d: String = ""): String = p.getString(k, d) ?: d
-    private fun put(k: String, v: String) = p.edit().putString(k, v).apply()
+    /** chiavi con DNS, utente o password delle linee (o la loro lista): sul disco cifrate, vedi Vault */
+    private fun vaulted(k: String) = k == "state" || k == "rc" || k.startsWith("plo_") || k.startsWith("ptl_") || k.startsWith("recent_")
+    // valori della cassaforte già aperti: si legge spesso lo stesso (server delle playlist, stato del pannello)
+    private val opened = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private fun s(k: String, d: String = ""): String {
+        val v = p.getString(k, null) ?: return d
+        if (!Vault.isSealed(v)) return v
+        opened[v]?.let { return it }
+        return Vault.open(v)?.also { if (opened.size > 64) opened.clear(); opened[v] = it } ?: d
+    }
+    private fun put(k: String, v: String) = p.edit().putString(k, if (vaulted(k)) Vault.seal(v) ?: v else v).apply()
+
+    /** liste M3U già riscaricate con la cassaforte (indirizzi nel database senza server, utente e password) */
+    var vaultDb: Boolean
+        get() = p.getBoolean("vaultDb", false)
+        set(v) = p.edit().putBoolean("vaultDb", v).apply()
+
+    /** dalla versione con la cassaforte: i valori vecchi in chiaro si cifrano; le chiavi col nome del server e le firme con
+        utente e password diventano impronte */
+    private fun migrateVault() {
+        try {
+            val e = p.edit()
+            var n = 0
+            for ((k, v) in p.all) {
+                if (v !is String) continue
+                if (vaulted(k) && v.isNotEmpty() && !Vault.isSealed(v)) { Vault.seal(v)?.let { e.putString(k, it); n++ } }
+                else if (k.startsWith("ptlbad_") && k.contains('.')) { e.remove(k); n++ }
+                else if (k.startsWith("syncSig") && v.contains('|')) { e.putString(k, Vault.hash(v)); n++ }
+            }
+            if (n > 0) e.apply()
+        } catch (_: Exception) {}
+    }
     fun playerOption(k: String, default: String): String = s("player_$k", default)
     fun setPlayerOption(k: String, value: String) = put("player_$k", value)
-    private fun portalKey(origin: String) = origin.trim().replace(Regex("^https?://", RegexOption.IGNORE_CASE), "").trimEnd('/').lowercase()
+    // impronta del server (non il suo nome) nella chiave «server in pausa»
+    private fun portalKey(origin: String) = Vault.hash(origin.trim().replace(Regex("^https?://", RegexOption.IGNORE_CASE), "").trimEnd('/').lowercase())
 
     fun portalChoice(id: String): String = s("ptl_$id")
     fun setPortalChoice(id: String, origin: String) = put("ptl_$id", origin)
@@ -172,7 +205,7 @@ object Store {
     fun saveEpgBuild(signature: String, at: Long) { p.edit().putString("epgSourceSig", signature).putLong("epgBuiltAt", at).apply() }
     fun clearEpgBuild() { p.edit().remove("epgSourceSig").remove("epgBuiltAt").apply() }
     fun setSynced(ids: List<String>, sig: String, at: Long) {
-        p.edit().putString("syncSig:" + syncKey(ids), sig).putLong("syncAt:" + syncKey(ids), at).apply()
+        p.edit().putString("syncSig:" + syncKey(ids), Vault.hash(sig)).putLong("syncAt:" + syncKey(ids), at).apply() // impronta: la firma ha utente e password
     }
     /** ultimo aggiornamento delle liste del portale in uso */
     val syncAt: Long get() = syncAtOf(K.activeIds())

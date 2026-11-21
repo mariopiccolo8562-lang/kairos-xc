@@ -316,6 +316,8 @@ object Db {
     private fun row(c: Cursor): Row {
         val m = HashMap<String, String?>()
         for (i in 0 until c.columnCount) m[c.getColumnName(i)] = if (c.isNull(i)) null else c.getString(i)
+        // indirizzo della lista M3U salvato senza server, utente e password (Playlist.packUrl)
+        m["url"]?.let { u -> if (u.startsWith(Playlist.PACK)) m["url"] = K.pl(m["pl"] ?: "")?.unpack(u) ?: u }
         return Row(m)
     }
 
@@ -341,8 +343,13 @@ object Db {
 
     fun episodes(seriesRow: Long): List<Ep> {
         val out = ArrayList<Ep>()
+        // playlist della serie: per rimettere server, utente e password negli indirizzi (Playlist.packUrl)
+        val pl = try { r.rawQuery("SELECT pl FROM series WHERE _id = ?", arrayOf(seriesRow.toString())).use { c -> if (c.moveToFirst()) K.pl(c.getString(0) ?: "") else null } } catch (_: Exception) { null }
         r.rawQuery("SELECT season, num, title, url FROM ep WHERE series = ? ORDER BY season, num, _id", arrayOf(seriesRow.toString())).use { c ->
-            while (c.moveToNext()) out.add(Ep(c.getInt(0), c.getInt(1), c.getString(2) ?: "", c.getString(3) ?: ""))
+            while (c.moveToNext()) {
+                val u = c.getString(3) ?: ""
+                out.add(Ep(c.getInt(0), c.getInt(1), c.getString(2) ?: "", if (u.startsWith(Playlist.PACK)) pl?.unpack(u) ?: u else u))
+            }
         }
         return out
     }

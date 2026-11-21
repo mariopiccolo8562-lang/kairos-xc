@@ -47,6 +47,11 @@ class Playlist(
     /** firma senza il server: se il pannello cambia DNS la lista non si ricarica da capo */
     fun sig(): String = id + "|" + type + "|" + user + "|" + pass + "|" + (if (isXtream) "" else pathOf(url))
 
+    /** Cassaforte (21 novembre 2026): nel database dei canali al posto del server c'è «kx:», e utente e password, quando
+        sono un pezzo del percorso, diventano «@U@» e «@P@». Si rimettono leggendo la riga (Db.row, Db.episodes): il resto
+        dell'app vede gli indirizzi come prima. Salvano indirizzi solo le liste M3U: le Xtream li ricostruiscono dal numero */
+    fun unpack(u: String): String = Playlist.unpackUrl(u, Store.plOrigin(id).ifEmpty { origin() }, user, pass)
+
     /** indirizzo salvato con il server vecchio → server attuale della playlist (cambio DNS dal pannello) */
     fun fix(stored: String): String {
         val old = Store.plOrigin(id)
@@ -55,6 +60,25 @@ class Playlist(
     }
 
     companion object {
+        const val PACK = "kx:"
+        /** [origin] = server della playlist quando si salva la lista (Store.plOrigin) */
+        fun packUrl(u: String, origin: String, user: String, pass: String): String {
+            if (u.isEmpty() || origin.isEmpty() || u.startsWith(PACK) || !u.startsWith(origin)) return u
+            if (u.length > origin.length && u[origin.length] !in charArrayOf('/', '?', '#')) return u
+            return PACK + creds(u.substring(origin.length), user, pass, true)
+        }
+        fun unpackUrl(u: String, origin: String, user: String, pass: String): String =
+            if (!u.startsWith(PACK) || origin.isEmpty()) u else origin + creds(u.substring(PACK.length), user, pass, false)
+        private fun creds(path: String, user: String, pass: String, hide: Boolean): String {
+            if (user.length < 3 && pass.length < 3) return path
+            val q = path.indexOf('?').let { if (it < 0) path.length else it }
+            val seg = path.substring(0, q).split('/').map { s ->
+                if (hide) when { user.length >= 3 && s == user -> "@U@"; pass.length >= 3 && s == pass -> "@P@"; else -> s }
+                else when (s) { "@U@" -> user; "@P@" -> pass; else -> s }
+            }
+            return seg.joinToString("/") + path.substring(q)
+        }
+
         internal fun rebaseOrigin(stored: String, old: String, now: String): String =
             if (old.isNotEmpty() && now.isNotEmpty() && old != now && stored.startsWith(old) &&
                 (stored.length == old.length || stored[old.length] in charArrayOf('/', '?', '#'))) {

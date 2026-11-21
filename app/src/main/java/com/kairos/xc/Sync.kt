@@ -58,7 +58,9 @@ object Sync {
         val key = ids.joinToString(",")
         // dopo un errore si riprova al massimo ogni 30 minuti (o subito con «Aggiorna liste»)
         if (failKey == key && System.currentTimeMillis() - failAt < 30 * 60_000L) return false
-        if (sig(pls) != Store.syncSigOf(ids) || System.currentTimeMillis() - Store.syncAtOf(ids) > 12 * 3600_000L) return true
+        if (!Vault.sameSig(Store.syncSigOf(ids), sig(pls)) || System.currentTimeMillis() - Store.syncAtOf(ids) > 12 * 3600_000L) return true
+        // prima volta con la cassaforte: le liste M3U si riscaricano una volta, così nel database non resta l'indirizzo del server
+        if (!Store.vaultDb && pls.any { !it.isXtream }) return true
         return if (dataOk == key) false else null
     }
     @Volatile private var dataOk = ""
@@ -168,6 +170,7 @@ object Sync {
                 // niente da segnare: le liste di questo portale si completano quando si torna a usarlo
             } else if (errors.isEmpty()) {
                 Store.setSynced(ids, sig(pls), System.currentTimeMillis())
+                Store.vaultDb = true
                 failAt = 0L
                 // scaricato senza errori (anche se il server ha mandato liste vuote): non si riscarica di continuo
                 dataOk = ids.joinToString(",")
@@ -426,6 +429,8 @@ object Sync {
 
     private fun m3u(p: Playlist, st: Stmts, step: (Int) -> Unit) {
         val hs = Remote.hideSep
+        // server della lista quando si salva: nel database al suo posto va «kx:» (Playlist.packUrl)
+        val po = try { Playlist.origin(URL(Playlist.fixUrl(p.url))) } catch (_: Exception) { "" } // lo stesso che poi va in Store.setPlOrigin
         val c = Http.open(Playlist.fixUrl(p.url), connectMs = 20_000, readMs = 120_000)
         try {
             if (c.responseCode >= 400) throw Exception("la playlist ha risposto HTTP ${c.responseCode}")
@@ -472,7 +477,7 @@ object Sync {
                         val s = st.vod
                         s.clearBindings()
                         s.bindString(1, key); s.bindString(2, p.id); s.bindString(3, cat("vod", m.group)); s.bindString(4, m.name)
-                        s.bindString(5, m.logo); s.bindNull(6); s.bindNull(7); s.bindString(8, l)
+                        s.bindString(5, m.logo); s.bindNull(6); s.bindNull(7); s.bindString(8, Playlist.packUrl(l, po, p.user, p.pass))
                         s.bindNull(9); s.s(10, yearOf(null, m.name)); s.bindLong(11, n); s.bindLong(12, if (ad) 1 else 0)
                         s.executeInsert()
                     } else if (low.contains("/series/") || RX_SE2.containsMatchIn(m.name)) {
@@ -490,14 +495,14 @@ object Sync {
                         val e = st.ep
                         e.clearBindings()
                         e.bindLong(1, row); e.bindLong(2, sm?.groupValues?.get(2)?.toLongOrNull() ?: 1); e.bindLong(3, sm?.groupValues?.get(3)?.toLongOrNull() ?: n)
-                        e.bindString(4, m.name); e.bindString(5, l)
+                        e.bindString(4, m.name); e.bindString(5, Playlist.packUrl(l, po, p.user, p.pass))
                         e.executeInsert()
                     } else {
                         val s = st.live
                         s.clearBindings()
                         s.bindString(1, key); s.bindString(2, p.id); s.bindString(3, cat("live", m.group))
                         s.bindLong(4, if (m.num > 0) m.num else n); s.bindString(5, m.name); s.bindString(6, m.logo)
-                        s.bindNull(7); s.bindString(8, l); s.bindNull(9); s.bindLong(10, if (ad) 1 else 0)
+                        s.bindNull(7); s.bindString(8, Playlist.packUrl(l, po, p.user, p.pass)); s.bindNull(9); s.bindLong(10, if (ad) 1 else 0)
                         st.quality(m.name)
                         s.bindLong(14, m.arch)
                         s.executeInsert()
