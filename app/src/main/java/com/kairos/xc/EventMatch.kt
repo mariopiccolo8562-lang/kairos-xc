@@ -179,6 +179,13 @@ object EventMatch {
         return false
     }
 
+    /** parole di una squadra più i nomi come li scrivono le guide italiane, mandati dal pannello («Bayern Monaco», «Rennes») */
+    fun teamWords(name: String?, person: Boolean, aka: List<String>): List<String> {
+        val base = teamWords(name, person)
+        if (aka.isEmpty()) return base
+        return (base + aka.map(::normT).filter { it.length >= 2 }).distinct()
+    }
+
     /** parole di una squadra (o il cognome di un giocatore) da cercare come parole intere */
     fun teamWords(name: String?, person: Boolean): List<String> {
         val n = normT(if (person) initials.replaceFirst(name.orEmpty(), "") else name)
@@ -199,11 +206,73 @@ object EventMatch {
         val away = event.away
         if (home == null || away == null) return normT(event.title).split(' ').filter { it.length >= 4 }.any { has(t, it) }
         val person = event.sport == "tennis" || event.sport == "ufc"
-        val a = teamWords(home.name, person)
-        val b = teamWords(away.name, person)
+        val a = teamWords(home.name, person, home.aka)
+        val b = teamWords(away.name, person, away.aka)
         if (a.any { has(t, it) } && b.any { has(t, it) }) return true
         val sportWords = if (event.sport == "tennis") listOf("tennis", "atp", "wta") else listOf("ufc")
         return person && (a.any { has(t, it) } || b.any { has(t, it) }) && sportWords.any { has(t, it) }
+    }
+
+    /* «Dove vederla» con le guide TV pubbliche (23 novembre 2026, il titolare: «perché da verificare? … prendi anche altre
+       fonti, importante che funzioni bene»). Il pannello legge ogni 3 ore le guide TV pubbliche italiane e manda con ogni
+       evento i canali confermati (tvch), i probabili (tvp) e i nomi italiani delle squadre (aka). Qui: il nome del canale
+       «pulito» per trovarli nella lista (uguale al pannello e a Kairos Pro), e il livello «probabile» dalla guida della lista. */
+    private val chShift = Regex("\\+\\s*\\d|\\bpiu ?\\d\\b", RegexOption.IGNORE_CASE)
+    private val chPrefix = Regex("^\\W*(it|ita|italy|italia)\\s*[:|\\-–]\\s*", RegexOption.IGNORE_CASE)
+    private val chQual = Regex("\\b(full ?hd|fhd|uhd|ultra ?hd|super ?hd|hdr ?plus|plus hd|hdr|hd|sd|raw|h ?265|hevc|1080[ip]?|720p|streaming|in streaming|fastweb|dsl lente|adsl lenta|backup|dtt|4k|8k|50fps|60fps)\\b")
+    private val chSports = Regex("\\bsports\\b")
+    private val chGlue = Regex("\\b(sport|eurosport|dazn|rai|italia|canale|sky)(\\d)")
+    private val chGlueQ = Regex("(\\d)(hd|fhd|uhd|sd|abr)\\b")
+    private val chUno = Regex("\\buno\\b")
+    private val chDue = Regex("\\bdue\\b")
+    private val chTre = Regex("\\btre\\b")
+    private val chSpaces = Regex("\\s+")
+    private val chTail = Regex(" (abr|italia)$")
+    private val chEuro = Regex("^(premium|sky) eurosport")
+    private val chSkyNum = Regex("^sky sport \\d{3}$")
+    private val chNum = Regex("^(.+) \\d{3}$")
+
+    /** «IT: Sky Sports Uno FHD» → «sky sport 1», «Rai Sport 227» → «rai sport»; le differite (+1, +24) → "" */
+    fun chKey(name: String?): String {
+        var n = name.orEmpty()
+        if (chShift.containsMatchIn(n)) return ""
+        n = chPrefix.replaceFirst(n, "").replace(brackets, " ").lowercase(Locale.ROOT)
+        n = Normalizer.normalize(n, Normalizer.Form.NFD).replace(marks, "")
+        n = n.replace(punctuation, " ").replace(chQual, " ").replace(chSports, "sport").replace(chGlue, "$1 $2").replace(chGlueQ, "$1")
+            .replace(chUno, "1").replace(chDue, "2").replace(chTre, "3").replace(chSpaces, " ").trim()
+            .replace(chTail, "").replace(chEuro, "eurosport")
+        if (!chSkyNum.matches(n)) n = chNum.replaceFirst(n, "$1")
+        return n
+    }
+
+    private val halfNoise = Regex("\\b(sunday|monday|prepartita|postpartita|highlights|studio|magazine|rubrica|replica)\\b")
+    private val vsTitle = Regex(" - | vs\\.? ", RegexOption.IGNORE_CASE)
+    private val clubRx = Regex("\\b(inter|milan|juventus|juve|roma|lazio|napoli|barca|real madrid|chelsea|liverpool|man utd|bayern) ?(tv|channel|style)\\b")
+    private val leagueWords = listOf(
+        Regex("serie a", RegexOption.IGNORE_CASE) to "serie a", Regex("serie b", RegexOption.IGNORE_CASE) to "serie b",
+        Regex("ligue", RegexOption.IGNORE_CASE) to "ligue 1", Regex("laliga|la liga|spanish", RegexOption.IGNORE_CASE) to "liga",
+        Regex("premier", RegexOption.IGNORE_CASE) to "premier league", Regex("bundesliga", RegexOption.IGNORE_CASE) to "bundesliga",
+        Regex("champions", RegexOption.IGNORE_CASE) to "champions league", Regex("europa league", RegexOption.IGNORE_CASE) to "europa league",
+        Regex("conference", RegexOption.IGNORE_CASE) to "conference league", Regex("coppa", RegexOption.IGNORE_CASE) to "coppa italia",
+        Regex("eredivisie", RegexOption.IGNORE_CASE) to "eredivisie",
+    )
+
+    /** canale di un club (Inter TV, Milan TV…): non trasmette le partite in diretta */
+    fun clubChannel(name: String): Boolean = clubRx.containsMatchIn(normT(name))
+
+    /** «probabile»: il titolo ha UNA delle due squadre, o il campionato se non è un'altra partita («Lazio - Lecce»); mai notizie e rubriche */
+    fun halfHit(event: SportEvent): ((String) -> Boolean)? {
+        val home = event.home ?: return null
+        val away = event.away ?: return null
+        val person = event.sport == "tennis" || event.sport == "ufc"
+        val a = teamWords(home.name, person, home.aka)
+        val b = teamWords(away.name, person, away.aka)
+        val lw = leagueWords.firstOrNull { it.first.containsMatchIn(event.league) }?.second.orEmpty()
+        return { title ->
+            val t = normT(title)
+            t.isNotEmpty() && !newsRx.containsMatchIn(t) && !halfNoise.containsMatchIn(t) &&
+                (a.any { has(t, it) } || b.any { has(t, it) } || (lw.isNotEmpty() && has(t, lw) && !vsTitle.containsMatchIn(title)))
+        }
     }
 
     /** programma in onda al calcio d'inizio (non le notizie di prima, non il dopo partita); tutto in millisecondi */

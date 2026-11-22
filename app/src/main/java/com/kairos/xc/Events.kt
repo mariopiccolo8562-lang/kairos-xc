@@ -14,6 +14,8 @@ data class EventTeam(
     val sets: List<Int> = emptyList(),
     val seed: Int? = null,
     val italian: Boolean = false,
+    /** nomi come li scrivono le guide italiane, dal pannello (23 novembre 2026) */
+    val aka: List<String> = emptyList(),
 )
 
 data class EventLeader(val name: String, val flag: String = "")
@@ -35,6 +37,9 @@ data class SportEvent(
     val gp: String = "",
     val session: String = "",
     val top: List<EventLeader> = emptyList(),
+    /** canali che secondo le guide TV pubbliche la trasmettono (confermati) e probabili, dal pannello (23 novembre 2026) */
+    val tvch: List<String> = emptyList(),
+    val tvp: List<String> = emptyList(),
 )
 
 data class EventChannel(
@@ -44,6 +49,8 @@ data class EventChannel(
     val logo: String,
     val reason: String,
     val epgHit: Boolean,
+    /** «probabile»: in guida a quell'ora c'è una delle due squadre o il campionato */
+    val probable: Boolean = false,
 )
 
 object Events {
@@ -135,8 +142,8 @@ object Events {
                     live = obj.optBoolean("live", false),
                     state = obj.string("state"),
                     clock = obj.string("clock"),
-                    home = obj.optJSONObject("home")?.let(::parseTeam),
-                    away = obj.optJSONObject("away")?.let(::parseTeam),
+                    home = obj.optJSONObject("home")?.let(::parseTeam)?.let { it.copy(aka = obj.optJSONObject("aka")?.optJSONArray("h").asStrings(6)) },
+                    away = obj.optJSONObject("away")?.let(::parseTeam)?.let { it.copy(aka = obj.optJSONObject("aka")?.optJSONArray("a").asStrings(6)) },
                     venue = obj.string("venue"),
                     round = obj.string("round"),
                     logo = obj.string("logo"),
@@ -144,6 +151,8 @@ object Events {
                     gp = obj.string("gp"),
                     session = obj.string("session"),
                     top = parseTop(obj.optJSONArray("top")),
+                    tvch = obj.optJSONArray("tvch").asStrings(8),
+                    tvp = obj.optJSONArray("tvp").asStrings(8),
                 ),
             )
         }
@@ -157,11 +166,22 @@ object Events {
         if (rows.isEmpty()) return emptyList()
         val byPlaylist = K.active().associateBy { it.id }
         val results = LinkedHashMap<Long, EventChannel>()
-        fun add(row: Db.EventLiveChannel, reason: String, epgHit: Boolean) {
+        fun add(row: Db.EventLiveChannel, reason: String, epgHit: Boolean, probable: Boolean = false) {
             if (results.size < 40 && !results.containsKey(row.id)) {
-                results[row.id] = EventChannel(row.id, row.k, row.name, row.logo, reason, epgHit)
+                results[row.id] = EventChannel(row.id, row.k, row.name, row.logo, reason, epgHit, probable)
             }
         }
+        // 0) guide TV pubbliche lette dal pannello (23 novembre 2026): i canali che a quell'ora trasmettono la partita
+        //    con tutte e due le squadre, trovati nella lista con il nome «pulito» (EventMatch.chKey)
+        val keyOf = HashMap<Long, String>()
+        fun byKey(names: List<String>): List<Db.EventLiveChannel> {
+            val want = names.map(EventMatch::chKey).filter { it.isNotEmpty() }.toSet()
+            if (want.isEmpty()) return emptyList()
+            return rows.filter { want.contains(keyOf.getOrPut(it.id) { EventMatch.chKey(it.name) }) }.sortedBy { EventMatch.quality(it.name) }
+        }
+        byKey(event.tvch).take(8).forEach { add(it, "Trasmessa secondo la guida TV", true) }
+        val half = EventMatch.halfHit(event)
+        val halfRows = LinkedHashMap<Long, Db.EventLiveChannel>()
         // «Dove vederla» (22 novembre 2026, il titolare: «il canale evento non corrisponde»): regola di EventMatch, come
         // Pro e pannello. 1) canali-evento con le due squadre nel nome; 2) guida TV: programma in onda al calcio d'inizio
         // che nomina l'evento; se ce ne sono, solo quelli. 3) altrimenti al massimo 6 dell'emittente giusta, da verificare.
@@ -179,10 +199,9 @@ object Events {
         }
         Db.scanProgrammes(lookup.keys.toList(), fromMs / 1000L, toMs / 1000L, 18_000) { programme ->
             val matches = lookup[programme.channel]
-            if (matches != null && EventMatch.atKick(event.start, programme.start * 1000L, programme.stop * 1000L) &&
-                EventMatch.titleHit(event, programme.title)
-            ) {
-                matches.forEach { add(it, "Trasmessa secondo la guida TV", true) }
+            if (matches != null && EventMatch.atKick(event.start, programme.start * 1000L, programme.stop * 1000L)) {
+                if (EventMatch.titleHit(event, programme.title)) matches.forEach { add(it, "Trasmessa secondo la guida TV", true) }
+                else if (half != null && half(programme.title)) matches.forEach { halfRows.putIfAbsent(it.id, it) }
             }
             results.size < 40
         }
@@ -192,16 +211,25 @@ object Events {
                 val items = Epg.shortCached(playlist, row.sid, 60).orEmpty()
                 if (items.any { EventMatch.atKick(event.start, it.start, it.end) && EventMatch.titleHit(event, it.title) }) {
                     add(row, "Trasmessa secondo la guida TV", true)
+                } else if (half != null && items.any { EventMatch.atKick(event.start, it.start, it.end) && half(it.title) }) {
+                    halfRows.putIfAbsent(row.id, row)
                 }
                 if (results.size >= 40) break
             }
         }
         if (results.isNotEmpty()) return results.values.toList() // confermati: solo quelli
+        // 4) probabili (al massimo 4): dal pannello, poi dalla guida della lista con una sola squadra o il campionato
+        byKey(event.tvp).take(4).forEach { add(it, "Probabile: a quell'ora in guida c'è questo campionato", false, true) }
+        for (row in halfRows.values) {
+            if (results.size >= 4) break
+            if (!EventMatch.clubChannel(row.name)) add(row, "Probabile: a quell'ora in guida c'è una delle due squadre o il campionato", false, true)
+        }
+        // 5) da verificare: l'emittente giusta
         val broadcasterTerms = EventMatch.broadcasterTerms(event)
         rows.asSequence()
             .filter { EventMatch.matchesBroadcaster(broadcasterTerms, it.name, it.category) && EventMatch.fallbackOk(event, it.name) }
             .sortedBy { EventMatch.quality(it.name) }
-            .take(6)
+            .take(maxOf(3, 8 - results.size))
             .forEach { row -> add(row, "Da verificare: di solito la trasmette questa emittente", false) }
         return results.values.toList()
     }
@@ -243,6 +271,16 @@ object Events {
         is String -> value
         is Number, is Boolean -> value.toString()
         else -> ""
+    }
+
+    private fun JSONArray?.asStrings(max: Int): List<String> {
+        if (this == null) return emptyList()
+        val out = ArrayList<String>(minOf(length(), max))
+        for (i in 0 until minOf(length(), max)) {
+            val v = opt(i) as? String ?: continue
+            if (v.isNotBlank()) out.add(v.trim().take(40))
+        }
+        return out
     }
 
     private fun JSONArray?.asInts(): List<Int> {
