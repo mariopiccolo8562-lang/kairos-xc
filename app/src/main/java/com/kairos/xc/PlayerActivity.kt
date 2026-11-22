@@ -1531,8 +1531,10 @@ class PlayerActivity : BaseActivity() {
         val dur = p.duration
         val pos = p.currentPosition
         if (dur <= 0 || dur == C.TIME_UNSET || vodId.isEmpty()) return
-        if (pos > dur * 95 / 100) {
+        // visto fino alla fine (92%, o a meno di 90 secondi dai titoli di coda): «già visto», niente barra a metà
+        if (pos > dur * 92 / 100 || (pos > dur / 2 && dur - pos < 90_000)) {
             Store.setPosition(vodId, 0)
+            Store.setWatched(vodId, true)
             finishedRecent()
             return
         }
@@ -1555,6 +1557,7 @@ class PlayerActivity : BaseActivity() {
         closeProblem()
         dropped = 0
         Store.setPosition(vodId, 0)
+        Store.setWatched(vodId, true)
         finishedRecent()
         if (queue.length() == 0) { finish(); return }
         val n = queue.optJSONObject(0) ?: run { finish(); return }

@@ -302,6 +302,24 @@ object Store {
     }
 
     /* ---------------- posizione di visione di film ed episodi ---------------- */
+    /* ---------------- «Già visto» (22 novembre 2026): film ed episodi visti fino alla fine, per profilo ---------------- */
+    @Volatile private var seenCache: Pair<String, Set<String>>? = null
+    private fun seenSet(): Set<String> {
+        val k = "seen_${prof()}"
+        seenCache?.let { if (it.first == k) return it.second }
+        val set = LinkedHashSet(s(k).split('\n').filter { it.isNotEmpty() })
+        seenCache = k to set
+        return set
+    }
+    fun watched(id: String): Boolean = id.isNotEmpty() && seenSet().contains(id)
+    fun setWatched(id: String, on: Boolean) {
+        if (id.isEmpty()) return
+        val l = LinkedHashSet(seenSet()); l.remove(id); if (on) l.add(id)
+        val list = l.toList().takeLast(3000)
+        put("seen_${prof()}", list.joinToString("\n"))
+        seenCache = "seen_${prof()}" to LinkedHashSet(list)
+    }
+
     fun position(id: String): Long = pos.getLong(id, 0)
     fun duration(id: String): Long = pos.getLong("$id#d", 0)
     fun setPosition(id: String, v: Long, dur: Long = 0) {

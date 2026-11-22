@@ -271,11 +271,11 @@ class DetailActivity : BaseActivity() {
     private fun refreshButtons() {
         if (table == "vod") {
             val pos = Store.position(key)
-            playBtn.text = if (pos > 60_000) "Riprendi da " + Ui.clock(pos) else "Guarda"
+            playBtn.text = if (pos > 60_000) "Riprendi da " + Ui.clock(pos) else if (Store.watched(key)) "Rivedi ✓" else "Guarda"
             restartBtn.visibility = if (pos > 60_000) View.VISIBLE else View.GONE
         } else {
             val e = lastEpisode()
-            playBtn.text = if (e != null) "Riprendi S${e.season} E${e.num}" else if (episodes.isNotEmpty()) "Guarda S${episodes[0].season} E${episodes[0].num}" else "Guarda"
+            playBtn.text = if (e != null) (if (Store.position(epKey(e)) > 60_000) "Riprendi S${e.season} E${e.num}" else "Guarda S${e.season} E${e.num}") else if (episodes.isNotEmpty()) "Guarda S${episodes[0].season} E${episodes[0].num}" else "Guarda"
             restartBtn.visibility = View.GONE
         }
     }
@@ -363,11 +363,12 @@ class DetailActivity : BaseActivity() {
         override fun onBindViewHolder(h: H, i: Int) {
             val e = items[i]
             h.tag.text = "E" + e.num
-            h.title.text = e.num.toString() + ". " + e.title.ifEmpty { "Episodio " + e.num }
+            val seen = Store.watched(epKey(e))
+            h.title.text = (if (seen) "✓ " else "") + e.num.toString() + ". " + e.title.ifEmpty { "Episodio " + e.num }
             h.meta.text = e.dur
             val pos = Store.position(epKey(e))
             val dur = Store.duration(epKey(e))
-            h.bar.visibility = if (pos > 0 && dur > 0) View.VISIBLE else View.GONE
+            h.bar.visibility = if (!seen && pos > 0 && dur > 0) View.VISIBLE else View.GONE
             h.bar.progress = if (dur > 0) (pos * 100 / dur).toInt() else 0
             val w = resources.getDimensionPixelSize(R.dimen.ep_w)
             Ui.img(h.img, e.img.ifEmpty { backdrop.ifEmpty { poster } }, w, w * 9 / 16, Img.BACKDROP)

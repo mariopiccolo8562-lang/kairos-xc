@@ -264,7 +264,7 @@ class VodActivity : BaseActivity() {
         // colonne: _id, k, pl, cat, name, img, sid, ext, url, rating, year
         override fun bind(h: H, c: Cursor, position: Int) {
             val name = c.getString(4) ?: ""
-            h.title.text = name
+            h.title.text = if (table == "vod" && Store.watched(c.getString(1) ?: "")) "✓ $name" else name // già visto (22 novembre 2026)
             h.ph.text = name
             val year = c.getString(10) ?: ""
             val r = stars(c.getString(9) ?: "")
