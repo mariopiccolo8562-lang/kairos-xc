@@ -89,7 +89,16 @@
             android:layout_height="wrap_content"
             android:layout_gravity="right|center_vertical"
             android:orientation="horizontal">
-            <LinearLayout android:id="@+id/search" style="@style/HomeTile" android:layout_marginLeft="0dp" android:contentDescription="CERCA">
+            <!-- 22 novembre 2026: eventi con «Dove vederla» e ultimo canale visto, come nelle altre app Kairos -->
+            <LinearLayout android:id="@+id/events" style="@style/HomeTile" android:layout_marginLeft="0dp" android:contentDescription="EVENTI">
+                <ImageView style="@style/HomeTileIcon" android:src="@drawable/ic_guide" />
+                <TextView style="@style/HomeTileLabel" android:text="EVENTI" />
+            </LinearLayout>
+            <LinearLayout android:id="@+id/lastCh" style="@style/HomeTile" android:contentDescription="ULTIMO CANALE">
+                <ImageView style="@style/HomeTileIcon" android:src="@drawable/ic_tv" />
+                <TextView style="@style/HomeTileLabel" android:text="ULTIMO" />
+            </LinearLayout>
+            <LinearLayout android:id="@+id/search" style="@style/HomeTile" android:contentDescription="CERCA">
                 <ImageView style="@style/HomeTileIcon" android:src="@drawable/hi_search" />
                 <TextView style="@style/HomeTileLabel" android:text="CERCA" />
             </LinearLayout>

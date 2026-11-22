@@ -104,6 +104,23 @@ object Db {
         return out
     }
 
+    class EventLiveChannel(val id: Long, val k: String, val pl: String, val sid: String, val name: String, val logo: String, val epg: String, val category: String)
+
+    /** canali dei portali in uso con la categoria: per «Dove vederla» degli eventi (22 novembre 2026, come KAIROS Ultimate) */
+    fun eventLiveChannels(pls: List<String>, kids: Boolean): List<EventLiveChannel> {
+        if (pls.isEmpty()) return emptyList()
+        val where = StringBuilder(if (pls.size == 1) "l.pl = ?" else "l.pl IN (${pls.joinToString(",") { "?" }})")
+        if (kids) where.append(" AND l.adult = 0")
+        val out = ArrayList<EventLiveChannel>()
+        r.rawQuery(
+            "SELECT l._id, l.k, l.pl, l.sid, l.name, l.logo, l.epg, c.name FROM live l LEFT JOIN cat c ON c.id = l.cat AND c.pl = l.pl WHERE $where ORDER BY l.num, l._id",
+            pls.toTypedArray(),
+        ).use { c ->
+            while (c.moveToNext()) out.add(EventLiveChannel(c.getLong(0), c.getString(1) ?: "", c.getString(2) ?: "", c.getString(3) ?: "", c.getString(4) ?: "", c.getString(5) ?: "", c.getString(6) ?: "", c.getString(7) ?: ""))
+        }
+        return out
+    }
+
     /** programmi salvati dei canali [channels] che toccano l'intervallo (secondi), in ordine di inizio; [visit] false = basta */
     fun scanProgrammes(channels: List<String>, fromSeconds: Long, toSeconds: Long, maxRows: Int, visit: (StoredProgramme) -> Boolean) {
         if (channels.isEmpty() || maxRows <= 0) return

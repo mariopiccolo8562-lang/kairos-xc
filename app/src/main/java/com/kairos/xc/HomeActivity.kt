@@ -54,6 +54,8 @@ class HomeActivity : BaseActivity() {
         findViewById<View>(R.id.film).setOnClickListener { open(VodActivity::class.java) { putExtra("kind", "vod") } }
         findViewById<View>(R.id.series).setOnClickListener { open(VodActivity::class.java) { putExtra("kind", "series") } }
         findViewById<View>(R.id.search).setOnClickListener { open(SearchActivity::class.java) }
+        findViewById<View>(R.id.events).setOnClickListener { open(EventiActivity::class.java) }
+        findViewById<View>(R.id.lastCh).setOnClickListener { LastCh.playLast(this) }
         findViewById<View>(R.id.vpn).setOnClickListener { toggleVpn() }
         findViewById<View>(R.id.dns).setOnClickListener { dnsTap() }
         findViewById<View>(R.id.msg).setOnClickListener { showMessages() }
@@ -63,7 +65,7 @@ class HomeActivity : BaseActivity() {
         findViewById<View>(R.id.settings).setOnClickListener { open(SettingsActivity::class.java) }
 
         for (id in listOf(R.id.live, R.id.film, R.id.series)) Ui.zoom(findViewById(id), 1.08f)
-        for (id in listOf(R.id.search, R.id.vpn, R.id.dns, R.id.msg, R.id.update, R.id.account, R.id.favorite, R.id.settings)) Ui.zoom(findViewById(id), 1.08f)
+        for (id in listOf(R.id.events, R.id.lastCh, R.id.search, R.id.vpn, R.id.dns, R.id.msg, R.id.update, R.id.account, R.id.favorite, R.id.settings)) Ui.zoom(findViewById(id), 1.08f)
 
         Sync.listen(syncL)
         live.requestFocus()
