@@ -65,7 +65,7 @@ object Pills {
         val ic = ImageView(ctx).apply {
             setImageResource(icon)
             layoutParams = LinearLayout.LayoutParams(dp(like, 20f), dp(like, 20f)).apply { rightMargin = dp(like, 6f) }
-            duplicateParentState = true
+            isDuplicateParentStateEnabled = true
         }
         val col = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_VERTICAL or Gravity.START }
         val t1 = TextView(ctx).apply { text = top; textSize = 11f; typeface = Typeface.DEFAULT_BOLD; letterSpacing = .07f; includeFontPadding = false; isSingleLine = true }
