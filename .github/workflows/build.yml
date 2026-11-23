@@ -84,6 +84,13 @@ jobs:
           name: kairos-xc-apk-${{ env.VERSION_NAME }}
           path: kairos-xc.apk
 
+      # mappa dei nomi del codice ridotto (R8): serve a leggere le righe delle app bloccate (Watchdog) mandate al pannello
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kairos-xc-mapping-${{ env.VERSION_NAME }}
+          path: app/build/outputs/mapping/release/mapping.txt
+          if-no-files-found: ignore
+
       - name: File per l'aggiornamento automatico
         if: env.IS_RELEASE == '1'
         run: |

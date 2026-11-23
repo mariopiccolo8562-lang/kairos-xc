@@ -37,6 +37,8 @@ class App : Application() {
         tiny = !max && Store.liteMode == "auto" && Line.device() == "D"
         // versione nuova (e APK già scaricato) dall'ultimo controllo: il blocco obbligatorio vale subito, anche senza rete
         Updater.restore()
+        // app bloccata: dove si ferma il thread principale va al pannello, «Errori delle app» (vedi Watchdog)
+        Watchdog.start()
         // immagini (vedi Img): la Home non ne carica, quindi Glide si prepara in sottofondo dopo i primi fotogrammi
         // (se una lista arriva prima, si prepara lì al primo caricamento)
         main.postDelayed({ bg { Img.glide() } }, 1_500)
