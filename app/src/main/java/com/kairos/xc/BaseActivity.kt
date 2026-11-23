@@ -27,23 +27,46 @@ abstract class BaseActivity : Activity() {
      * Lucchetto «DNS» accanto allo scudo (13 novembre 2026): c'è quando il fornitore ha acceso il DNS cifrato dal pannello.
      * Colori e frasi in [DnsBadge]. Al tocco dice lo stato; dopo un rifiuto o un errore riprova.
      */
+    private var dnsPill: Pills.Pill? = null
+    private var rotPill: Pills.Pill? = null
     fun dnsBadge(v: ImageView?) {
-        dnsView = v ?: return
-        v.setOnClickListener { dnsTap() }
+        v ?: return
+        // 23 novembre 2026 (il titolare: «scrivi CRIPTO DNS, falli della stessa dimensione»): al posto del lucchetto il pulsante
+        // largo «CRIPTO DNS» e accanto «ROTAX DNS» (Pills, RotBadge)
+        val p = Pills.swap(v, R.drawable.ic_dns_lock, "CRIPTO", "DNS")
+        if (p != null) {
+            dnsPill = p; dnsView = p.icon
+            p.box.setOnClickListener { dnsTap() }
+            rotPill = Pills.after(p, R.drawable.ic_dns_rot, "ROTAX", "DNS", true)?.also { r -> r.box.setOnClickListener { rotTap() } }
+        } else { dnsView = v; v.setOnClickListener { dnsTap() } }
         dnsRefresh()
     }
+    /** «ROTAX DNS»: c'è quando la lista in uso ha server di riserva; il numero = quanti indirizzi */
+    fun rotRefresh() {
+        val r = rotPill ?: return
+        val s = RotBadge.of(K.active().firstOrNull())
+        if (s == null) { r.box.visibility = View.GONE; return }
+        r.box.visibility = View.VISIBLE
+        r.count?.text = s.second.toString()
+        Pills.paint(r, RotBadge.color(s.first))
+        r.box.contentDescription = RotBadge.text(s.first, s.third, s.second)
+    }
+    fun rotTap() { val s = RotBadge.of(K.active().firstOrNull()) ?: return; Ui.toast(RotBadge.text(s.first, s.third, s.second)) }
     /** stato del DNS cifrato da mostrare ("" = il fornitore non lo ha acceso: niente lucchetto) */
     fun dnsState(): String = DnsBadge.state(Remote.sdns && Panel.state?.active == true, KxVpn.state == "on", DnsShield.state)
     fun dnsRefresh() {
         onDnsChanged()
+        rotRefresh()
         val v = dnsView ?: return
+        val box: View = dnsPill?.box ?: v
         val st = dnsState()
-        if (st.isEmpty()) { v.visibility = View.GONE; return }
-        v.visibility = View.VISIBLE
-        v.isFocusable = true; v.isClickable = true
+        if (st.isEmpty()) { box.visibility = View.GONE; return }
+        box.visibility = View.VISIBLE
+        box.isFocusable = true; box.isClickable = true
         v.imageTintList = android.content.res.ColorStateList.valueOf(DnsBadge.color(st))
-        v.alpha = if (st == "off") 0.7f else 1f
-        v.contentDescription = DnsBadge.text(st)
+        dnsPill?.let { Pills.paint(it, DnsBadge.color(st)) }
+        box.alpha = if (st == "off") 0.7f else 1f
+        box.contentDescription = DnsBadge.text(st)
     }
     fun dnsTap() {
         val st = dnsState()

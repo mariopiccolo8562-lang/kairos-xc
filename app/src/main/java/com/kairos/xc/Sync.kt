@@ -129,6 +129,8 @@ object Sync {
             // le M3U si leggono in una volta sola (canali, film e serie sono nello stesso file)
             val jobs = ArrayList<Pair<Int, String>>()
             for (part in parts) pls.forEachIndexed { i, p -> if (p.isXtream || part == "live") jobs.add(i to part) }
+            // 23 novembre 2026: se il server in uso non risponde, le liste si scaricano da un indirizzo di riserva (PortalReach)
+            for (p in pls) if (p.isXtream) try { PortalReach.ensure(p) } catch (_: Throwable) {}
             val failed = HashSet<String>()
             val myIds = pls.map { it.id }
             var aborted = false

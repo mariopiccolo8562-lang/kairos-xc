@@ -231,6 +231,7 @@ class HomeActivity : BaseActivity() {
 
     /** tessera «DNS»: c'è quando il fornitore ha acceso il DNS cifrato; colore e frase in [DnsBadge] */
     override fun onDnsChanged() {
+        rotTile()
         val tile = findViewById<View>(R.id.dns) ?: return
         val st = dnsState()
         tile.visibility = if (st.isEmpty()) View.GONE else View.VISIBLE
@@ -240,6 +241,21 @@ class HomeActivity : BaseActivity() {
         findViewById<TextView>(R.id.dnsLabel).setTextColor(c)
         tile.alpha = if (st == "off") 0.7f else 1f
         tile.contentDescription = DnsBadge.text(st)
+    }
+
+    /** tessera «ROTAX DNS» (23 novembre 2026): c'è quando la lista in uso ha server di riserva; colore e frase in [RotBadge] */
+    private fun rotTile() {
+        val box = findViewById<View>(R.id.rotBox) ?: return
+        val s = RotBadge.of(K.active().firstOrNull())
+        box.visibility = if (s == null) View.GONE else View.VISIBLE
+        if (s == null) return
+        val c = RotBadge.color(s.first)
+        findViewById<ImageView>(R.id.rotIcon).imageTintList = android.content.res.ColorStateList.valueOf(c)
+        findViewById<TextView>(R.id.rotLabel).setTextColor(c)
+        findViewById<TextView>(R.id.rotCount).text = s.second.toString()
+        val tile = findViewById<View>(R.id.rot)
+        tile.contentDescription = RotBadge.text(s.first, s.third, s.second)
+        tile.setOnClickListener { Ui.toast(RotBadge.text(s.first, s.third, s.second)) }
     }
 
     private fun showSync() {
