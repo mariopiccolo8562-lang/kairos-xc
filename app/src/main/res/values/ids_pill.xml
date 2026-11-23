@@ -2,4 +2,6 @@
 <resources>
     <!-- pulsanti «CRIPTO DNS» e «ROTAX DNS» (Pills.kt) -->
     <item name="kx_pill" type="id" />
+    <item name="kx_pill_mode" type="id" />
+    <item name="kx_pill_fit" type="id" />
 </resources>

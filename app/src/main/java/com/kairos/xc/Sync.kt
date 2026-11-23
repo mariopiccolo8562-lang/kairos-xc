@@ -129,8 +129,9 @@ object Sync {
             // le M3U si leggono in una volta sola (canali, film e serie sono nello stesso file)
             val jobs = ArrayList<Pair<Int, String>>()
             for (part in parts) pls.forEachIndexed { i, p -> if (p.isXtream || part == "live") jobs.add(i to part) }
-            // 23 novembre 2026: se il server in uso non risponde, le liste si scaricano da un indirizzo di riserva (PortalReach)
-            for (p in pls) if (p.isXtream) try { PortalReach.ensure(p) } catch (_: Throwable) {}
+            // 23 novembre 2026: lista dai DNS di riserva solo se serve: se il download dal server in uso fallisce si prova
+            // un indirizzo di riserva (PortalReach) e si rifà quella parte. Prima si controllava ogni volta all'avvio (il titolare:
+            // «all'avvio ci mette una vita per caricare la lista»)
             val failed = HashSet<String>()
             val myIds = pls.map { it.id }
             var aborted = false
@@ -148,20 +149,28 @@ object Sync {
                 val from = n * 100 / jobs.size
                 val span = 100 / jobs.size
                 val step = { v: Int -> setPct(from + v * span / 100) }
-                db.beginTransactionNonExclusive()
-                try {
-                    // prima di cancellare le liste vecchie: la linea risponde davvero? (pagina d'errore, linea scaduta…)
-                    if (p.isXtream && part == "live") checkLine(p)
-                    if (p.isXtream) Db.dropKind(db, p.id, part) else Db.dropPlaylist(db, p.id)
-                    val st = Stmts(db, i * 1_000_000L + parts.indexOf(part) * 300_000L)
-                    if (p.isXtream) xtream(p, st, part, step) else m3u(p, st, step)
-                    db.setTransactionSuccessful()
-                    if (!p.isXtream) Store.setPlOrigin(p.id, try { Playlist.origin(URL(Playlist.fixUrl(p.url))) } catch (_: Exception) { "" })
-                } catch (t: Throwable) {
-                    failed.add(p.id)
-                    errors.add((if (pls.size > 1) p.name + ": " else "") + (t.message ?: t.javaClass.simpleName))
-                } finally {
-                    db.endTransaction()
+                var tries = 0
+                while (true) {
+                var retry = false
+                    db.beginTransactionNonExclusive()
+                    try {
+                        // prima di cancellare le liste vecchie: la linea risponde davvero? (pagina d'errore, linea scaduta…)
+                        if (p.isXtream && part == "live") checkLine(p)
+                        if (p.isXtream) Db.dropKind(db, p.id, part) else Db.dropPlaylist(db, p.id)
+                        val st = Stmts(db, i * 1_000_000L + parts.indexOf(part) * 300_000L)
+                        if (p.isXtream) xtream(p, st, part, step) else m3u(p, st, step)
+                        db.setTransactionSuccessful()
+                        if (!p.isXtream) Store.setPlOrigin(p.id, try { Playlist.origin(URL(Playlist.fixUrl(p.url))) } catch (_: Exception) { "" })
+                    } catch (t: Throwable) {
+                        // il server non risponde: una volta sola si passa a un indirizzo di riserva e si rifà la parte
+                        if (tries++ == 0 && p.isXtream && (try { PortalReach.ensure(p) } catch (_: Throwable) { false })) retry = true else {
+                            failed.add(p.id)
+                            errors.add((if (pls.size > 1) p.name + ": " else "") + (t.message ?: t.javaClass.simpleName))
+                        }
+                    } finally {
+                        db.endTransaction()
+                    }
+                if (!retry) break
                 }
                 if (p.isXtream) bump(part) else parts.forEach { bump(it) }
                 phase++

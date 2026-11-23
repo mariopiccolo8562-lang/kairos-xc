@@ -12,11 +12,16 @@
         android:scaleType="centerCrop"
         android:src="@drawable/home_bg" />
 
-    <!-- in alto -->
-    <FrameLayout
+    <!-- in alto (23 novembre 2026, il titolare: «le icone della pagina home coprono il nome dell'abbonamento»): una riga sola,
+         logo | nome dell'abbonamento nello spazio che resta (si accorcia con i puntini) | icone. Prima i tre pezzi erano
+         sovrapposti e con CRIPTO DNS e ROTAX DNS le icone finivano sopra al nome. -->
+    <LinearLayout
+        android:id="@+id/topBar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="top"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
         android:paddingLeft="@dimen/home_pad"
         android:paddingTop="@dimen/home_pad_v"
         android:paddingRight="@dimen/home_pad">
@@ -56,9 +61,12 @@
                 android:textStyle="bold" />
         </LinearLayout>
         <LinearLayout
-            android:layout_width="wrap_content"
+            android:id="@+id/portalBox"
+            android:layout_width="0dp"
+            android:layout_weight="1"
             android:layout_height="@dimen/home_tile"
-            android:layout_gravity="center_horizontal"
+            android:layout_marginLeft="10dp"
+            android:layout_marginRight="6dp"
             android:gravity="center"
             android:orientation="vertical">
             <TextView
@@ -85,9 +93,9 @@
                 android:textSize="11sp" />
         </LinearLayout>
         <LinearLayout
+            android:id="@+id/topIcons"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_gravity="right|center_vertical"
             android:orientation="horizontal">
             <!-- 22 novembre 2026: eventi con «Dove vederla» e ultimo canale visto, come nelle altre app Kairos -->
             <LinearLayout android:id="@+id/events" style="@style/HomeTile" android:layout_marginLeft="0dp" android:contentDescription="EVENTI">
@@ -140,7 +148,7 @@
                 <TextView style="@style/HomeTileLabel" android:text="UPDATE" />
             </LinearLayout>
         </LinearLayout>
-    </FrameLayout>
+    </LinearLayout>
 
     <!-- i tre cerchi -->
     <LinearLayout
