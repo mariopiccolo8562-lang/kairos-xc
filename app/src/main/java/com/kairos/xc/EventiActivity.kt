@@ -109,7 +109,7 @@ class EventiActivity : BaseActivity() {
             val ch = try { Events.channelsFor(e) } catch (_: Exception) { emptyList() }
             runOnUiThread {
                 if (isFinishing) return@runOnUiThread
-                if (ch.isEmpty()) { Ui.dialog(this, "Dove vederla", "Nella tua lista non c'è un canale che la trasmette, o la guida TV non lo dice."); return@runOnUiThread }
+                if (ch.isEmpty()) { Ui.dialog(this, "Dove vederla", if (Events.offAir(e)) Events.OFF_AIR else "Nella tua lista non c'è un canale che la trasmette, o la guida TV non lo dice."); return@runOnUiThread }
                 val names = ch.map { (if (it.epgHit) "✓ " + it.name else if (it.probable) "≈ " + it.name + " (probabile)" else "? " + it.name + " (da verificare)") }.toTypedArray()
                 Ui.choose(this, "Dove vederla · " + title(e), names, -1) { i -> LastCh.play(this, ch[i].id, ch[i].k, Db.ALL) }
             }

@@ -13,7 +13,8 @@ class RotaxTest {
         assertEquals("res", RotBadge.state("auto", 3, true))
         assertEquals("warn", RotBadge.state("auto", 2, false)) // principale giù: in uso la riserva
         assertEquals("", RotBadge.state("main", 2, true))
-        assertTrue(RotBadge.text("on", "rot", 2).contains("2 indirizzi (1 principale + 1 di riserva) · a turno"))
+        assertEquals("I DNS sono gestiti dal fornitore", RotBadge.text("on", "rot", 2))
+        assertFalse(RotBadge.text("warn", "auto", 3).contains("riserva"))
         assertFalse(RotBadge.text("warn", "auto", 2).contains("server.esempio"))
         assertEquals(0xFF2EE59D.toInt(), RotBadge.color("on"))
     }

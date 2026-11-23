@@ -40,6 +40,8 @@ data class SportEvent(
     /** canali che secondo le guide TV pubbliche la trasmettono (confermati) e probabili, dal pannello (23 novembre 2026) */
     val tvch: List<String> = emptyList(),
     val tvp: List<String> = emptyList(),
+    /** canali dell'emittente che a quell'ora, secondo le guide, trasmettono altro (23 novembre 2026) */
+    val tvno: List<String> = emptyList(),
 )
 
 data class EventChannel(
@@ -153,11 +155,16 @@ object Events {
                     top = parseTop(obj.optJSONArray("top")),
                     tvch = obj.optJSONArray("tvch").asStrings(8),
                     tvp = obj.optJSONArray("tvp").asStrings(8),
+                    tvno = obj.optJSONArray("tvno").asStrings(12),
                 ),
             )
         }
         return if (out.isEmpty() && array.length() > 0) null else out
     }
+
+    /** secondo le guide TV a quell'ora nessun canale italiano la trasmette (i soliti hanno in onda altro) */
+    fun offAir(event: SportEvent): Boolean = event.tvch.isEmpty() && event.tvno.isNotEmpty()
+    const val OFF_AIR = "Adesso nessun canale italiano la trasmette: secondo le guide TV i canali che di solito la danno hanno in onda altro."
 
     fun channelsFor(event: SportEvent): List<EventChannel> {
         val active = K.activeIds()
@@ -224,10 +231,13 @@ object Events {
             if (results.size >= 4) break
             if (!EventMatch.clubChannel(row.name)) add(row, "Probabile: a quell'ora in guida c'è una delle due squadre o il campionato", false, true)
         }
-        // 5) da verificare: l'emittente giusta
+        // 5) da verificare: l'emittente giusta, ma non i canali che secondo le guide a quell'ora trasmettono altro (23 novembre 2026,
+        //    il titolare: «gli eventi sono ancora da verificare»; Bulls-Nuggets di notte, Sky Sport NBA con un documentario)
         val broadcasterTerms = EventMatch.broadcasterTerms(event)
+        val offKeys = event.tvno.map(EventMatch::chKey).filter { it.isNotEmpty() }.toSet()
         rows.asSequence()
             .filter { EventMatch.matchesBroadcaster(broadcasterTerms, it.name, it.category) && EventMatch.fallbackOk(event, it.name) }
+            .filter { offKeys.isEmpty() || !offKeys.contains(keyOf.getOrPut(it.id) { EventMatch.chKey(it.name) }) }
             .sortedBy { EventMatch.quality(it.name) }
             .take(maxOf(3, 8 - results.size))
             .forEach { row -> add(row, "Da verificare: di solito la trasmette questa emittente", false) }
