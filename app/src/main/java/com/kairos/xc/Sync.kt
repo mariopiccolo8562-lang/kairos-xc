@@ -115,7 +115,9 @@ object Sync {
         try {
             Vpns.awaitForced() // VPN «sempre attiva»: le liste passano dalla VPN
             val active = K.active()
-            if (!App.isPlayer(App.top) && active.map { it.id } == pls.map { it.id }) Portals.probe(active)
+            // 23 novembre 2026 (il titolare: «all'avvio ci mette una vita per caricare la lista»): tolta la prova di tutti gli
+            // indirizzi prima delle liste (una richiesta per indirizzo, una dopo l'altra, fino a 13 s l'una, e sempre allo stesso
+            // server). Il DNS di riserva entra solo se il server in uso non risponde (PortalReach qui sotto e il lettore).
             val db = Db.w
             // sul disco restano il portale in uso e quello usato prima (per tornarci al volo); gli altri si tolgono
             val assigned = K.playlists().map { it.id }

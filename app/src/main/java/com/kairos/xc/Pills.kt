@@ -130,6 +130,8 @@ object Pills {
         val r = android.graphics.Rect()
         for (i in 0 until row.childCount) {
             val c = row.getChildAt(i); if (c.visibility != View.VISIBLE || c.width <= 0) continue
+            // striscia delle sezioni che scorre (TV, Premium): se non ci stanno tutte, prima si stringono i pulsanti DNS
+            if (c is android.widget.HorizontalScrollView && c.childCount > 0 && c.getChildAt(0).width > c.width + dp(row, 2f)) return true
             // fuori dallo spazio della riga (anche quando la riga non taglia i figli e ci finirebbero sopra altre scritte)
             if (c.left < row.paddingLeft - dp(row, 1f) || c.right > row.width - row.paddingRight + dp(row, 1f)) return true
             if (!c.getGlobalVisibleRect(r) || r.width() < c.width - dp(row, 2f)) return true
