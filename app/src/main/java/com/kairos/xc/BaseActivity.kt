@@ -37,7 +37,7 @@ abstract class BaseActivity : Activity() {
         if (p != null) {
             dnsPill = p; dnsView = p.icon
             p.box.setOnClickListener { dnsTap() }
-            rotPill = Pills.after(p, R.drawable.ic_dns_rot, "ROTAX", "DNS", true)?.also { r -> r.box.setOnClickListener { rotTap() } }
+            rotPill = Pills.after(p, R.drawable.ic_dns_rot, "ROTAX", "DNS", false)?.also { r -> r.box.setOnClickListener { rotTap() } }
         } else { dnsView = v; v.setOnClickListener { dnsTap() } }
         dnsRefresh()
     }

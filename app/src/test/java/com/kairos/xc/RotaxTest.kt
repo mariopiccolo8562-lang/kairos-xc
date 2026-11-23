@@ -10,9 +10,10 @@ class RotaxTest {
     @Test fun statoDelPulsante() {
         assertEquals("x", RotBadge.state("auto", 1, true)) // senza riserva: niente pulsante
         assertEquals("on", RotBadge.state("rot", 2, true))
-        assertEquals("res", RotBadge.state("auto", 3, true))
+        assertEquals("on", RotBadge.state("auto", 3, true)) // principale in uso: verde
         assertEquals("warn", RotBadge.state("auto", 2, false)) // principale giù: in uso la riserva
-        assertEquals("", RotBadge.state("main", 2, true))
+        assertEquals("on", RotBadge.state("main", 2, true))
+        assertEquals("warn", RotBadge.state("alt", 2, false)) // fissato sulla riserva: giallo
         assertEquals("I DNS sono gestiti dal fornitore", RotBadge.text("on", "rot", 2))
         assertFalse(RotBadge.text("warn", "auto", 3).contains("riserva"))
         assertFalse(RotBadge.text("warn", "auto", 2).contains("server.esempio"))

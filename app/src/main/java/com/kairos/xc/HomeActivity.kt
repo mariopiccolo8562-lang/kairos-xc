@@ -252,7 +252,7 @@ class HomeActivity : BaseActivity() {
         val c = RotBadge.color(s.first)
         findViewById<ImageView>(R.id.rotIcon).imageTintList = android.content.res.ColorStateList.valueOf(c)
         findViewById<TextView>(R.id.rotLabel).setTextColor(c)
-        findViewById<TextView>(R.id.rotCount).text = s.second.toString()
+        findViewById<TextView>(R.id.rotCount).visibility = View.GONE // il numero dei DNS non interessa ai clienti (23 novembre 2026)
         val tile = findViewById<View>(R.id.rot)
         tile.contentDescription = RotBadge.text(s.first, s.third, s.second)
         tile.setOnClickListener { Ui.toast(RotBadge.text(s.first, s.third, s.second)) }

@@ -9,11 +9,13 @@ package com.kairos.xc
  */
 object RotBadge {
     /** "x" = niente pulsante; "on", "res", "warn", "" (fisso) */
+    /** 23 novembre 2026, il titolare: «le due icone verde»: verde col principale (o a turno), giallo quando si usa la riserva */
     fun state(mode: String, n: Int, usingMain: Boolean): String = when {
         n < 2 -> "x"
         mode == "rot" -> "on"
-        mode == "auto" || mode.isEmpty() -> if (usingMain) "res" else "warn"
-        else -> ""
+        mode == "alt" -> "warn"
+        mode == "main" -> "on"
+        else -> if (usingMain) "on" else "warn"
     }
 
     fun color(st: String): Int = when (st) {
