@@ -740,7 +740,7 @@ class PlayerActivity : BaseActivity() {
         lastPos = pos
         if (frozen >= 8) {
             frozen = 0
-            recover("freeze", "immagine ferma")
+            recover("freeze", if (n <= 0) "video nero" else "immagine ferma") // 23 novembre 2026: nessun fotogramma = video nero con l'audio
         }
     }
 
@@ -899,8 +899,11 @@ class PlayerActivity : BaseActivity() {
         // canale partito già ridotto per la connessione e che si blocca ancora: dritto alla versione ancora più leggera
         if (fresh && kind == "stall" && reduced && reducedByLine && switchLighter(byLine = true)) { lastAction = "versione più leggera"; fixAt = now; return }
         val ladder = if (live) when (problem) {
-            "freeze" -> if (Line.device() == "D" || problemErr == "immagine a scatti") listOf("reload", "lighter", "alt", "soft") else listOf("reload", "soft", "alt", "lighter")
-            "stall" -> if (longStall) listOf("alt", "lighter", "reload", "server") else listOf("lighter", "alt", "cushion")
+            // video nero con l'audio (23 novembre 2026, il titolare: «con video nero… il secondo DNS entra?»): dopo il riavvio il DNS di riserva
+            "freeze" -> if (problemErr == "video nero") listOf("reload", "server", "soft", "alt", "lighter")
+                else if (Line.device() == "D" || problemErr == "immagine a scatti") listOf("reload", "lighter", "alt", "soft") else listOf("reload", "soft", "alt", "lighter")
+            "stall" -> if (longStall && problemErr == "avvio lento") listOf("alt", "server", "reload", "lighter") // 23 novembre 2026: canale che non parte (né video né audio): presto il DNS di riserva
+                else if (longStall) listOf("alt", "lighter", "reload", "server") else listOf("lighter", "alt", "cushion")
             else -> listOf("reload", "server", "alt", "soft", "lighter")
         } else when (problem) {
             "stall" -> if (longStall) listOf("reload", "server", "reload") else listOf("cushion", "cushion")
