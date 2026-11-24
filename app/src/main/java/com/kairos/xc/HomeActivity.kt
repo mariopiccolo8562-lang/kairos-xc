@@ -223,8 +223,14 @@ class HomeActivity : BaseActivity() {
         val vpn = findViewById<View>(R.id.vpn)
         // scudo anche quando la VPN la gestisce il fornitore (spenta, o consentita senza permesso): voce «shield» del pannello
         val show = s != null && (s.vpnShield || (s.vpnConf.isNotEmpty() && (s.vpnMode == "force" || (s.vpnMode == "allow" && s.perm("vpn")))))
-        vpn.visibility = if (show) View.VISIBLE else View.GONE
-        vpn.alpha = if (s?.vpnMode == "force" || KxVpn.active() || KxVpn.state == "on") 1f else 0.6f
+        // 24 novembre 2026 (il titolare: «a tutte le app devono esserci in PRIMO PIANO PONTE, ROTEX, DNS e VPN»): sempre in vista;
+        // verde accesa, gialla in avvio, grigia spenta o non prevista
+        @Suppress("UNUSED_VARIABLE") val shown = show
+        vpn.visibility = View.VISIBLE
+        val vOn = KxVpn.state == "on" || (s?.vpnMode == "force" && KxVpn.active())
+        val vCol = if (vOn) 0xFF2EE59D.toInt() else if (KxVpn.state == "connecting") 0xFFF5B041.toInt() else 0xCCFFFFFF.toInt()
+        ((vpn as? android.view.ViewGroup)?.getChildAt(0) as? ImageView)?.imageTintList = android.content.res.ColorStateList.valueOf(vCol)
+        vpn.alpha = if (vOn || KxVpn.state == "connecting") 1f else 0.75f
         findViewById<View>(R.id.msgDot).visibility = if (K.unseenMessages().isNotEmpty()) View.VISIBLE else View.GONE
         onDnsChanged()
     }
@@ -235,13 +241,12 @@ class HomeActivity : BaseActivity() {
         ponTile()
         val tile = findViewById<View>(R.id.dns) ?: return
         val st = dnsState()
-        tile.visibility = if (st.isEmpty()) View.GONE else View.VISIBLE
-        if (st.isEmpty()) return
-        val c = DnsBadge.color(st)
+        tile.visibility = View.VISIBLE // 24 novembre 2026: sempre in vista, grigia se il fornitore non lo ha acceso
+        val c = if (st.isEmpty()) 0xCCFFFFFF.toInt() else DnsBadge.color(st)
         findViewById<ImageView>(R.id.dnsIcon).imageTintList = android.content.res.ColorStateList.valueOf(c)
         findViewById<TextView>(R.id.dnsLabel).setTextColor(c)
-        tile.alpha = if (st == "off") 0.7f else 1f
-        tile.contentDescription = DnsBadge.text(st)
+        tile.alpha = if (st == "off" || st.isEmpty()) 0.75f else 1f
+        tile.contentDescription = if (st.isEmpty()) "DNS cifrato non attivo" else DnsBadge.text(st)
     }
 
     /** tessera «ROTAX DNS» (23 novembre 2026): c'è quando la lista in uso ha server di riserva; colore e frase in [RotBadge] */
@@ -249,27 +254,26 @@ class HomeActivity : BaseActivity() {
     private fun ponTile() {
         val tile = findViewById<View>(R.id.pon) ?: return
         val st = RotBadge.ponte(K.active().firstOrNull())
-        tile.visibility = if (st == null) View.GONE else View.VISIBLE
-        if (st == null) return
-        val c = RotBadge.color(st)
+        tile.visibility = View.VISIBLE // sempre in vista: grigia se la lista non passa dal Ponte
+        val c = if (st == null) 0xCCFFFFFF.toInt() else RotBadge.color(st)
         findViewById<ImageView>(R.id.ponIcon).imageTintList = android.content.res.ColorStateList.valueOf(c)
         findViewById<TextView>(R.id.ponLabel).setTextColor(c)
-        tile.contentDescription = "PONTE " + RotBadge.ponteText(st)
-        tile.setOnClickListener { Ui.toast(RotBadge.ponteText(st)) }
+        tile.alpha = if (st == null) 0.75f else 1f
+        tile.contentDescription = "PONTE " + RotBadge.ponteText(st ?: "")
+        tile.setOnClickListener { Ui.toast(RotBadge.ponteText(st ?: "")) }
     }
 
     private fun rotTile() {
         val box = findViewById<View>(R.id.rotBox) ?: return
         val s = RotBadge.of(K.active().firstOrNull())
-        box.visibility = if (s == null) View.GONE else View.VISIBLE
-        if (s == null) return
-        val c = RotBadge.color(s.first)
+        box.visibility = View.VISIBLE // 24 novembre 2026: sempre in vista, grigia senza lista
+        val c = if (s == null) 0xCCFFFFFF.toInt() else RotBadge.color(s.first)
         findViewById<ImageView>(R.id.rotIcon).imageTintList = android.content.res.ColorStateList.valueOf(c)
         findViewById<TextView>(R.id.rotLabel).setTextColor(c)
         findViewById<TextView>(R.id.rotCount).visibility = View.GONE // il numero dei DNS non interessa ai clienti (23 novembre 2026)
         val tile = findViewById<View>(R.id.rot)
-        tile.contentDescription = RotBadge.text(s.first, s.third, s.second)
-        tile.setOnClickListener { Ui.toast(RotBadge.text(s.first, s.third, s.second)) }
+        tile.contentDescription = if (s == null) "ROTAX DNS" else RotBadge.text(s.first, s.third, s.second)
+        tile.setOnClickListener { Ui.toast(if (s == null) RotBadge.MSG else RotBadge.text(s.first, s.third, s.second)) }
     }
 
     private fun showSync() {

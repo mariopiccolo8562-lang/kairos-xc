@@ -48,24 +48,25 @@ abstract class BaseActivity : Activity() {
         ponteRefresh()
         val r = rotPill ?: return
         val s = RotBadge.of(K.active().firstOrNull())
-        if (s == null) { r.box.visibility = View.GONE; return }
-        r.box.visibility = View.VISIBLE
+        r.box.visibility = View.VISIBLE // 24 novembre 2026: sempre in vista, grigio senza lista
+        if (s == null) { Pills.paint(r, 0xCCFFFFFF.toInt()); r.box.alpha = 0.75f; r.box.contentDescription = "ROTAX DNS"; return }
+        r.box.alpha = 1f
         r.count?.text = s.second.toString()
         Pills.paint(r, RotBadge.color(s.first))
         r.box.contentDescription = RotBadge.text(s.first, s.third, s.second)
     }
-    fun rotTap() { val s = RotBadge.of(K.active().firstOrNull()) ?: return; Ui.toast(RotBadge.text(s.first, s.third, s.second)) }
+    fun rotTap() { val s = RotBadge.of(K.active().firstOrNull()); Ui.toast(if (s == null) RotBadge.MSG else RotBadge.text(s.first, s.third, s.second)) }
     /** «PONTE» (24 novembre 2026, il titolare: «icona con una figura di un ponte»): c'è quando la lista passa dal Ponte del
      *  fornitore, verde se il Ponte va bene, giallo se usa una riserva. Al tocco niente dettagli. */
     fun ponteRefresh() {
         val q = ponPill ?: return
         val st = RotBadge.ponte(K.active().firstOrNull())
-        if (st == null) { q.box.visibility = View.GONE; return }
-        q.box.visibility = View.VISIBLE
-        Pills.paint(q, RotBadge.color(st))
-        q.box.contentDescription = "PONTE " + RotBadge.ponteText(st)
+        q.box.visibility = View.VISIBLE // sempre in vista: grigio se la lista non passa dal Ponte
+        Pills.paint(q, if (st == null) 0xCCFFFFFF.toInt() else RotBadge.color(st))
+        q.box.alpha = if (st == null) 0.75f else 1f
+        q.box.contentDescription = "PONTE " + RotBadge.ponteText(st ?: "")
     }
-    fun ponteTap() { val st = RotBadge.ponte(K.active().firstOrNull()) ?: return; Ui.toast(RotBadge.ponteText(st)) }
+    fun ponteTap() { Ui.toast(RotBadge.ponteText(RotBadge.ponte(K.active().firstOrNull()) ?: "")) }
     /** stato del DNS cifrato da mostrare ("" = il fornitore non lo ha acceso: niente lucchetto) */
     fun dnsState(): String = DnsBadge.state(Remote.sdns && Panel.state?.active == true, KxVpn.state == "on", DnsShield.state)
     fun dnsRefresh() {
@@ -74,17 +75,16 @@ abstract class BaseActivity : Activity() {
         val v = dnsView ?: return
         val box: View = dnsPill?.box ?: v
         val st = dnsState()
-        if (st.isEmpty()) { box.visibility = View.GONE; return }
-        box.visibility = View.VISIBLE
+        box.visibility = View.VISIBLE // 24 novembre 2026: sempre in vista, grigio se il fornitore non lo ha acceso
         box.isFocusable = true; box.isClickable = true
-        v.imageTintList = android.content.res.ColorStateList.valueOf(DnsBadge.color(st))
-        dnsPill?.let { Pills.paint(it, DnsBadge.color(st)) }
-        box.alpha = if (st == "off") 0.7f else 1f
-        box.contentDescription = DnsBadge.text(st)
+        v.imageTintList = android.content.res.ColorStateList.valueOf(if (st.isEmpty()) 0xCCFFFFFF.toInt() else DnsBadge.color(st))
+        dnsPill?.let { Pills.paint(it, if (st.isEmpty()) 0xCCFFFFFF.toInt() else DnsBadge.color(st)) }
+        box.alpha = if (st == "off" || st.isEmpty()) 0.75f else 1f
+        box.contentDescription = if (st.isEmpty()) "DNS cifrato non attivo" else DnsBadge.text(st)
     }
     fun dnsTap() {
         val st = dnsState()
-        if (st.isEmpty()) return
+        if (st.isEmpty()) { Ui.toast("DNS cifrato non attivo: lo decide il fornitore"); return }
         if (!DnsBadge.canRetry(st)) { Ui.toast(DnsBadge.text(st)); return }
         DnsShield.retry()
         Vpns.apply(this)
@@ -97,9 +97,14 @@ abstract class BaseActivity : Activity() {
 
     /** Scudo VPN nella barra in alto. Compare solo se il fornitore lo ha permesso dal pannello: VPN «Consentita» + permesso
      *  «Accendere/spegnere la VPN». Con «Sempre attiva» è un semplice indicatore (acceso, non si tocca); altrimenti è nascosto. */
+    private var vpnPill: Pills.Pill? = null
     fun vpnShield(v: ImageView?) {
-        shieldView = v ?: return
-        v.setOnClickListener { vpnToggle() }
+        v ?: return
+        // 24 novembre 2026 (il titolare: «è scomparso lo scudo della VPN… a tutte le app devono esserci in PRIMO PIANO PONTE,
+        // ROTEX, DNS e VPN»): al posto dell'icona il pulsante largo «SCUDO VPN», uguale a CRIPTO DNS / ROTAX DNS / PONTE
+        val p = Pills.swap(v, R.drawable.ic_shield, "SCUDO", "VPN")
+        if (p != null) { vpnPill = p; shieldView = p.icon; p.box.setOnClickListener { vpnToggle() } }
+        else { shieldView = v; v.setOnClickListener { vpnToggle() } }
         shieldRefresh()
     }
     fun shieldRefresh() {
@@ -112,14 +117,17 @@ abstract class BaseActivity : Activity() {
         // la VPN la gestisce il fornitore (sempre attiva, consentita senza permesso, spenta): lo scudo c'è lo stesso e si può
         // premere, per leggere «VPN gestita dal fornitore» (voce «shield» del pannello)
         val managed = s != null && s.active && s.vpnShield
-        if (!can && !forced && !managed) { v.visibility = View.GONE; return }
-        v.visibility = View.VISIBLE
-        v.isFocusable = true; v.isClickable = true
+        @Suppress("UNUSED_VARIABLE") val shown = can || forced || managed // 24 novembre 2026: lo scudo c'è sempre (grigio se la VPN non c'è)
+        val box: View = vpnPill?.box ?: v
+        box.visibility = View.VISIBLE
+        box.isFocusable = true; box.isClickable = true
         val st = KxVpn.state
         val on = st == "on" || (forced && KxVpn.active())
-        v.imageTintList = android.content.res.ColorStateList.valueOf(if (on) 0xFF2EE59D.toInt() else if (st == "connecting") 0xFFF5B041.toInt() else 0xCCFFFFFF.toInt())
-        v.alpha = if (on || st == "connecting") 1f else 0.7f
-        v.contentDescription = if (!can) "VPN gestita dal fornitore" else if (on) "VPN attiva: premi per spegnerla" else "VPN spenta: premi per accenderla"
+        val col = if (on) 0xFF2EE59D.toInt() else if (st == "connecting" || st == "error" || st == "denied") 0xFFF5B041.toInt() else 0xCCFFFFFF.toInt()
+        v.imageTintList = android.content.res.ColorStateList.valueOf(col)
+        vpnPill?.let { Pills.paint(it, col) }
+        box.alpha = if (on || st == "connecting") 1f else 0.75f
+        box.contentDescription = if (!can) "VPN gestita dal fornitore" else if (on) "VPN attiva: premi per spegnerla" else "VPN spenta: premi per accenderla"
     }
     private fun vpnToggle() {
         val s = Panel.state ?: return

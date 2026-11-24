@@ -55,5 +55,5 @@ object RotBadge {
      *  Ponte del fornitore. "on" = verde, "warn" = giallo (il Ponte usa una riserva o un suo DNS non risponde), null = niente. */
     fun ponte(p: Playlist?): String? = p?.ponte?.takeIf { it.isNotEmpty() }?.let { if (it == "ok") "on" else "warn" }
     /** al tocco: niente indirizzi né dettagli */
-    fun ponteText(st: String): String = if (st == "warn") "Il Ponte del fornitore sta usando un percorso di riserva" else "La connessione passa dal Ponte del fornitore"
+    fun ponteText(st: String): String = when (st) { "warn" -> "Il Ponte del fornitore sta usando un percorso di riserva"; "" -> "La connessione non passa dal Ponte"; else -> "La connessione passa dal Ponte del fornitore" }
 }
