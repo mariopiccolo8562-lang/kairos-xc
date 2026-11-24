@@ -12,6 +12,7 @@ import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.graphics.drawable.GradientDrawable
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
@@ -68,6 +69,29 @@ class LiveActivity : BaseActivity() {
     /** canale partito nel riquadro: il prossimo OK su di lui apre lo schermo intero */
     private var previewId = 0L
     private var previewK = ""
+    /** 24 novembre 2026 (il titolare: «il canale in visione mettimi un pallino verde, qualcosa che si vede il canale aperto anche
+     *  mentre faccio zapping»): canale aperto = quello nel riquadro dell'anteprima, altrimenti l'ultimo guardato a schermo intero da
+     *  questa lista. Pallino verde a destra del nome, controllato a ogni riga disegnata e una volta al secondo */
+    private var lastFullK = ""
+    private fun openKey(): String = if (previewId != 0L) previewK else lastFullK
+    private val openTick = object : Runnable { override fun run() { markOpen(); App.main.postDelayed(this, 1000) } }
+    private fun openDot(t: TextView, on: Boolean) {
+        val d = t.compoundDrawablesRelative
+        if ((d[2] != null) == on) return
+        val dot = if (!on) null else GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(0xFF2EE66F.toInt())
+            setStroke(Ui.dp(this@LiveActivity, 3), 0x552EE66F)
+            Ui.dp(this@LiveActivity, 14).let { setSize(it, it) }
+        }
+        t.compoundDrawablePadding = Ui.dp(this, 8)
+        t.setCompoundDrawablesRelativeWithIntrinsicBounds(d[0], d[1], dot, d[3])
+    }
+    private fun markOpen() {
+        if (!::channels.isInitialized) return
+        val ok = openKey()
+        for (i in 0 until channels.childCount) (channels.getChildViewHolder(channels.getChildAt(i)) as? ChannelAdapter.H)?.let { openDot(it.name, it.k.isNotEmpty() && it.k == ok) }
+    }
     private var previewName = ""
     /** nome sul riquadro mentre l'anteprima va (resta quello del canale in onda) */
     private var previewLabel = ""
@@ -122,6 +146,7 @@ class LiveActivity : BaseActivity() {
 
     override fun onResume() {
         super.onResume()
+        App.main.removeCallbacks(openTick); App.main.post(openTick)
         favSet = Store.favs("live")
         // portale o profilo cambiati mentre si guardava (pannello, Impostazioni): elenco del portale giusto
         // (di ritorno dal lettore resta il canale guardato, già indicato in onActivityResult)
@@ -134,6 +159,7 @@ class LiveActivity : BaseActivity() {
 
     override fun onPause() {
         super.onPause()
+        App.main.removeCallbacks(openTick)
         stopVideo()
     }
 
@@ -439,6 +465,7 @@ class LiveActivity : BaseActivity() {
         stopVideo()
         releaseVideo() // un solo decoder alla volta: l'anteprima si chiude prima dello schermo intero
         Store.setLastLive(id, k)
+        lastFullK = k
         val target = if (Remote.engine("live") == "vlc") VlcActivity::class.java else PlayerActivity::class.java
         @Suppress("DEPRECATION")
         startActivityForResult(Intent(this, target).putExtra("kind", "live").putExtra("cat", curCat).putExtra("rowId", id), 7)
@@ -448,7 +475,7 @@ class LiveActivity : BaseActivity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == 7 && data != null) {
             val k = data.getStringExtra("chK").orEmpty()
-            if (k.isNotEmpty()) { restoreK = k; pendingCat = catAdapter.items.find { it.id == curCat }; loadChannels() }
+            if (k.isNotEmpty()) { lastFullK = k; restoreK = k; pendingCat = catAdapter.items.find { it.id == curCat }; loadChannels() }
         }
     }
 
@@ -481,6 +508,8 @@ class LiveActivity : BaseActivity() {
             val now: TextView = v.findViewById(R.id.now)
             val bar: ProgressBar = v.findViewById(R.id.bar)
             val fav: ImageView = v.findViewById(R.id.fav)
+            /** chiave stabile del canale in questa riga (per il pallino del canale aperto) */
+            var k = ""
         }
 
         override fun onCreateViewHolder(p: ViewGroup, t: Int): H {
@@ -509,6 +538,7 @@ class LiveActivity : BaseActivity() {
             val size = Ui.dp(h.itemView.context, 38)
             Ui.img(h.logo, if (App.max) null else logo, size, size) // «Leggerissima»: solo iniziali, niente immagini da scaricare
             val k = c.getString(1) ?: ""
+            h.k = k; openDot(h.name, k.isNotEmpty() && k == openKey())
             h.fav.visibility = if (favSet.contains(k)) View.VISIBLE else View.GONE
             val p = K.pl(c.getString(2) ?: "")
             val now = Epg.cached(p, c.getString(7) ?: "", 4, c.getString(9) ?: "", name)?.firstOrNull()
