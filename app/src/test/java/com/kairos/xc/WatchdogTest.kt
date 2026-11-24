@@ -27,4 +27,10 @@ class WatchdogTest {
         val st = arrayOf(f("a", "Db.kt", 10), f("a", "Db.kt", 10), f("b", "Sync.kt", 5))
         assertEquals("Bloccata 8s (WAITING): Db:10 < Sync:5", Watchdog.describe(st, 8_000, "WAITING", "?").first)
     }
+
+    @Test fun codiceRidottoConClasseEMetodoEMemoria() {
+        val st = arrayOf(StackTraceElement("android.graphics.Paint", "native_init", null, -2), StackTraceElement("com.kairos.xc.a0", "b", "SourceFile", 63), f("android.view.View", "View.java", 3876))
+        val (a, _) = Watchdog.describe(st, 8_200, "RUNNABLE", "LiveActivity", "93/96MB")
+        assertEquals("Bloccata 8s (RUNNABLE, 93/96MB): a0.b:63 < View:3876", a)
+    }
 }
