@@ -29,6 +29,7 @@ abstract class BaseActivity : Activity() {
      */
     private var dnsPill: Pills.Pill? = null
     private var rotPill: Pills.Pill? = null
+    private var ponPill: Pills.Pill? = null // «PONTE» (24 novembre 2026)
     fun dnsBadge(v: ImageView?) {
         v ?: return
         // 23 novembre 2026 (il titolare: «scrivi CRIPTO DNS, falli della stessa dimensione»): al posto del lucchetto il pulsante
@@ -38,11 +39,13 @@ abstract class BaseActivity : Activity() {
             dnsPill = p; dnsView = p.icon
             p.box.setOnClickListener { dnsTap() }
             rotPill = Pills.after(p, R.drawable.ic_dns_rot, "ROTAX", "DNS", false)?.also { r -> r.box.setOnClickListener { rotTap() } }
+            ponPill = rotPill?.let { r -> Pills.after(r, R.drawable.ic_ponte, "PONTE", "KAIROS", false) }?.also { q -> q.box.setOnClickListener { ponteTap() } }
         } else { dnsView = v; v.setOnClickListener { dnsTap() } }
         dnsRefresh()
     }
     /** «ROTAX DNS»: c'è quando la lista in uso ha server di riserva; il numero = quanti indirizzi */
     fun rotRefresh() {
+        ponteRefresh()
         val r = rotPill ?: return
         val s = RotBadge.of(K.active().firstOrNull())
         if (s == null) { r.box.visibility = View.GONE; return }
@@ -52,6 +55,17 @@ abstract class BaseActivity : Activity() {
         r.box.contentDescription = RotBadge.text(s.first, s.third, s.second)
     }
     fun rotTap() { val s = RotBadge.of(K.active().firstOrNull()) ?: return; Ui.toast(RotBadge.text(s.first, s.third, s.second)) }
+    /** «PONTE» (24 novembre 2026, il titolare: «icona con una figura di un ponte»): c'è quando la lista passa dal Ponte del
+     *  fornitore, verde se il Ponte va bene, giallo se usa una riserva. Al tocco niente dettagli. */
+    fun ponteRefresh() {
+        val q = ponPill ?: return
+        val st = RotBadge.ponte(K.active().firstOrNull())
+        if (st == null) { q.box.visibility = View.GONE; return }
+        q.box.visibility = View.VISIBLE
+        Pills.paint(q, RotBadge.color(st))
+        q.box.contentDescription = "PONTE " + RotBadge.ponteText(st)
+    }
+    fun ponteTap() { val st = RotBadge.ponte(K.active().firstOrNull()) ?: return; Ui.toast(RotBadge.ponteText(st)) }
     /** stato del DNS cifrato da mostrare ("" = il fornitore non lo ha acceso: niente lucchetto) */
     fun dnsState(): String = DnsBadge.state(Remote.sdns && Panel.state?.active == true, KxVpn.state == "on", DnsShield.state)
     fun dnsRefresh() {

@@ -232,6 +232,7 @@ class HomeActivity : BaseActivity() {
     /** tessera «DNS»: c'è quando il fornitore ha acceso il DNS cifrato; colore e frase in [DnsBadge] */
     override fun onDnsChanged() {
         rotTile()
+        ponTile()
         val tile = findViewById<View>(R.id.dns) ?: return
         val st = dnsState()
         tile.visibility = if (st.isEmpty()) View.GONE else View.VISIBLE
@@ -244,6 +245,19 @@ class HomeActivity : BaseActivity() {
     }
 
     /** tessera «ROTAX DNS» (23 novembre 2026): c'è quando la lista in uso ha server di riserva; colore e frase in [RotBadge] */
+    /** tessera «PONTE» (24 novembre 2026): c'è quando la lista passa dal Ponte del fornitore; colore e frase in [RotBadge] */
+    private fun ponTile() {
+        val tile = findViewById<View>(R.id.pon) ?: return
+        val st = RotBadge.ponte(K.active().firstOrNull())
+        tile.visibility = if (st == null) View.GONE else View.VISIBLE
+        if (st == null) return
+        val c = RotBadge.color(st)
+        findViewById<ImageView>(R.id.ponIcon).imageTintList = android.content.res.ColorStateList.valueOf(c)
+        findViewById<TextView>(R.id.ponLabel).setTextColor(c)
+        tile.contentDescription = "PONTE " + RotBadge.ponteText(st)
+        tile.setOnClickListener { Ui.toast(RotBadge.ponteText(st)) }
+    }
+
     private fun rotTile() {
         val box = findViewById<View>(R.id.rotBox) ?: return
         val s = RotBadge.of(K.active().firstOrNull())

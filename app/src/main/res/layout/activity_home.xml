@@ -127,6 +127,11 @@
                 </LinearLayout>
                 <TextView android:id="@+id/rotCount" android:layout_width="16dp" android:layout_height="16dp" android:layout_gravity="top|right" android:layout_margin="3dp" android:background="@drawable/dot_accent" android:gravity="center" android:textColor="#FF0B0B10" android:textSize="10sp" android:textStyle="bold" android:includeFontPadding="false" />
             </FrameLayout>
+            <!-- PONTE (24 novembre 2026): c'è quando la lista passa dal Ponte del fornitore; verde = va bene, giallo = usa una riserva -->
+            <LinearLayout android:id="@+id/pon" style="@style/HomeTile" android:contentDescription="PONTE" android:visibility="gone">
+                <ImageView android:id="@+id/ponIcon" style="@style/HomeTileIcon" android:src="@drawable/ic_ponte" />
+                <TextView android:id="@+id/ponLabel" style="@style/HomeTileLabel" android:text="PONTE&#10;KAIROS" android:singleLine="false" android:maxLines="2" android:gravity="center" android:textSize="8sp" android:lineSpacingMultiplier="0.9" android:layout_marginTop="1dp" />
+            </LinearLayout>
             <FrameLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content">

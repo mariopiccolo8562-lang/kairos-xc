@@ -34,4 +34,16 @@ class RotaxTest {
         assertEquals(2, rot.size)
         assertFalse(rot.contains(c[1]))
     }
+
+    @Test fun rotaxFissoEPonte() {
+        // 24 novembre 2026: ROTAX DNS sempre in vista; con il Ponte segue lo stato del Ponte
+        assertEquals("on", RotBadge.fixed("", 1, "auto", true, false)) // senza riserva: c'è lo stesso, verde
+        assertEquals("warn", RotBadge.fixed("", 1, "auto", true, true)) // senza riserva e server giù: giallo
+        assertEquals("on", RotBadge.fixed("ok", 1, "auto", true, false)) // Ponte che va: verde
+        assertEquals("warn", RotBadge.fixed("warn", 1, "auto", true, false)) // Ponte su una riserva: giallo
+        assertEquals("warn", RotBadge.fixed("", 2, "auto", false, true)) // con le riserve: come prima
+        assertEquals(null, RotBadge.fixed("", 0, "auto", false, false)) // nessuna lista: niente pulsante
+        assertFalse(RotBadge.ponteText("warn").contains("http"))
+        assertFalse(RotBadge.ponteText("on").contains("."))
+    }
 }

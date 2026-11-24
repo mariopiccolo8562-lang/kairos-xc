@@ -29,13 +29,31 @@ object RotBadge {
     @Suppress("UNUSED_PARAMETER")
     fun text(st: String, mode: String, n: Int): String = MSG
 
-    /** stato della lista in uso: (stato, numero di indirizzi, modo) o null */
+    /** stato della lista in uso: (stato, numero di indirizzi, modo) o null (nessuna lista) */
     fun of(p: Playlist?): Triple<String, Int, String>? {
         p ?: return null
         val c = Portals.cands(p)
-        if (c.size < 2) return null
-        val usingMain = Portals.host(p).equals(c.first(), true)
-        val st = state(p.mode, c.size, usingMain)
-        return if (st == "x") null else Triple(st, c.size, p.mode)
+        val usingMain = c.isNotEmpty() && Portals.host(p).equals(c.first(), true)
+        val st = fixed(p.ponte, c.size, p.mode, usingMain, c.isNotEmpty() && Portals.isBad(c.first())) ?: return null
+        return Triple(st, c.size, if (p.ponte.isNotEmpty()) "ponte" else p.mode)
     }
+
+    /**
+     * 24 novembre 2026 (il titolare: «rimetti anche icona rotex fissa… se il rotex funziona bene [verde] altrimenti invece di
+     * verde diventa gialla»): ROTAX DNS c'è sempre quando c'è una lista, anche senza DNS di riserva. Lista che passa dal Ponte:
+     * lo stato del Ponte mandato dal pannello ("ok" verde, "warn" giallo). Senza riserve: giallo se il server della lista
+     * risulta giù. Con le riserve: come prima ([state]). null = nessuna lista (niente pulsante).
+     */
+    fun fixed(ponte: String, n: Int, mode: String, usingMain: Boolean, mainBad: Boolean): String? = when {
+        ponte.isNotEmpty() -> if (ponte == "ok") "on" else "warn"
+        n <= 0 -> null
+        n < 2 -> if (mainBad) "warn" else "on"
+        else -> state(mode, n, usingMain).takeIf { it != "x" }
+    }
+
+    /** «PONTE» (24 novembre 2026, il titolare: «un'altra icona… con una figura di un ponte»): c'è quando la lista passa dal
+     *  Ponte del fornitore. "on" = verde, "warn" = giallo (il Ponte usa una riserva o un suo DNS non risponde), null = niente. */
+    fun ponte(p: Playlist?): String? = p?.ponte?.takeIf { it.isNotEmpty() }?.let { if (it == "ok") "on" else "warn" }
+    /** al tocco: niente indirizzi né dettagli */
+    fun ponteText(st: String): String = if (st == "warn") "Il Ponte del fornitore sta usando un percorso di riserva" else "La connessione passa dal Ponte del fornitore"
 }

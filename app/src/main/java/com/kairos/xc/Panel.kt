@@ -16,6 +16,8 @@ class Playlist(
     val host: String, val user: String, val pass: String, val tag: String,
     val alts: List<String> = emptyList(), val altNames: List<String> = emptyList(),
     val mainName: String = "", val mode: String = "auto",
+    /** 24 novembre 2026: "ok" / "warn" se la lista passa dal Ponte del fornitore (stato del Ponte), "" altrimenti */
+    val ponte: String = "",
 ) {
     val isXtream: Boolean get() = type == "xtream" && host.isNotEmpty() && user.isNotEmpty()
 
@@ -94,6 +96,7 @@ class Playlist(
                 o.optString("id"), o.optString("name"), o.optString("type"), o.optString("url"),
                 o.optString("host"), o.optString("username"), o.optString("password"), o.optString("tag"),
                 strings("alts"), strings("altNames"), o.optString("mainName"), o.optString("mode").takeIf { it in listOf("auto", "main", "alt", "rot") } ?: "auto",
+                o.optString("ponte").takeIf { it == "ok" || it == "warn" } ?: "",
             )
         }
         fun enc(s: String): String = URLEncoder.encode(s, "UTF-8").replace("+", "%20")
