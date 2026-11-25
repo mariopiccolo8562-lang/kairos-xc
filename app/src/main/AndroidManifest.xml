@@ -17,6 +17,8 @@
 
     <!-- «Pulizia automatica»: per vedere le app installate e chiuderne i processi in sottofondo -->
     <queries>
+        <!-- Kairos Store: installa gli aggiornamenti dell'app senza chiedere il permesso all'app (ViaStore.kt) -->
+        <package android:name="com.kairos.store" />
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />

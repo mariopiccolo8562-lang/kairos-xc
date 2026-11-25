@@ -134,7 +134,7 @@ object Store {
     var bgUpdate: Boolean
         get() = Remote.bgUpdate ?: p.getBoolean("bgUpdate", true)
         set(v) = p.edit().putBoolean("bgUpdate", v).apply()
-    /** primo avviso al cliente della versione [updFirstCode] (da qui contano i giorni dell'aggiornamento obbligatorio) */
+    /** primo avviso di aggiornamento con la versione installata [updFirstCode] (da qui contano i giorni dell'aggiornamento obbligatorio) */
     var updFirstCode: Int
         get() = p.getInt("updFirstCode", 0)
         set(v) = p.edit().putInt("updFirstCode", v).apply()

@@ -275,7 +275,9 @@ object Updater {
 
     /** primo avviso al cliente di [u]: da lì contano i giorni di grazia dell'aggiornamento obbligatorio */
     private fun firstSeen(u: Upd): Long {
-        if (Store.updFirstCode != u.code || Store.updFirstAt == 0L) { Store.updFirstCode = u.code; Store.updFirstAt = System.currentTimeMillis() }
+        // 25 novembre 2026: il conto riparte solo quando il cliente aggiorna (versione installata diversa), non a ogni versione nuova
+        // pubblicata: con più versioni al giorno l'aggiornamento obbligatorio non scadeva mai
+        if (Store.updFirstCode != BuildConfig.VERSION_CODE || Store.updFirstAt == 0L) { Store.updFirstCode = BuildConfig.VERSION_CODE; Store.updFirstAt = System.currentTimeMillis() }
         return Store.updFirstAt
     }
 
@@ -283,7 +285,6 @@ object Updater {
     fun must(): Boolean {
         val u = pending ?: return false
         val days = Remote.forceDays ?: return false
-        if (ready?.exists() != true) return false
         return System.currentTimeMillis() - firstSeen(u) >= days * 86_400_000L
     }
 
@@ -295,6 +296,8 @@ object Updater {
         if (a == null || a.isFinishing || App.isPlayer(a)) return
         if (resumeInstall(a)) return
         val u = pending ?: return
+        // 25 novembre 2026: versione nuova trovata durante la visione (lì non si scarica mai): si scarica adesso, appena si è in un menu
+        if (ready == null && !busy.get() && Store.bgUpdate && !metered() && prefetchFailed < 3) bg { prefetch(u) }
         if (must()) { if (!busy.get()) prompt(a, u); return }
         if (quietWay(u)) return // Android 12+: si installa da sola quando il cliente esce dall'app
         if (askedCode == u.code || busy.get()) return
@@ -337,19 +340,19 @@ object Updater {
         if (a.isFinishing) return
         firstSeen(u)
         val r = ready
-        if (must() && r != null) {
+        if (must()) {
             // aggiornamento obbligatorio: si va avanti solo installando (niente «Più tardi», il tasto indietro non chiude)
             if (lock?.isShowing == true && lock?.ownerActivity === a) return
             try { lock?.dismiss() } catch (_: Exception) {}
             val d = AlertDialog.Builder(a)
                 .setTitle("Aggiornamento ${u.ver} necessario")
-                .setMessage("Per continuare a usare ${a.getString(R.string.app_name)} va installata la versione nuova: è già scaricata e verificata. Premi Installa e conferma nella schermata di Android, ci vuole meno di un minuto." + Quiet.hint(Store.quietFailCode, Store.quietFailSt, u.code, Build.MANUFACTURER ?: ""))
+                .setMessage((if (r != null && r.exists()) "Per continuare a usare ${a.getString(R.string.app_name)} va installata la versione nuova: è già scaricata e verificata. Premi Installa e conferma nella schermata di Android, ci vuole meno di un minuto." else "Per continuare a usare ${a.getString(R.string.app_name)} va installata la versione nuova: premi Aggiorna ora, si scarica e si installa. Ci vuole circa un minuto.") + Quiet.hint(Store.quietFailCode, Store.quietFailSt, u.code, Build.MANUFACTURER ?: ""))
                 .setCancelable(false)
-                .setPositiveButton("Installa ora", null)
+                .setPositiveButton(if (r != null && r.exists()) "Installa ora" else "Aggiorna ora", null)
                 .setNegativeButton("Chiudi l'app") { _, _ -> a.finishAffinity() }
                 .create()
             d.setOwnerActivity(a)
-            d.setOnShowListener { d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener { install(a, r) } } // la finestra resta finché l'installer non riavvia l'app
+            d.setOnShowListener { d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener { val rr = ready; if (rr != null && rr.exists()) install(a, rr) else download(a, u.url) } } // la finestra resta finché l'installer non riavvia l'app
             lock = d
             try { d.show() } catch (_: Exception) {}
             return
@@ -437,6 +440,7 @@ object Updater {
     private fun install(a: Activity, apk: File) {
         installWhenReady = false
         if (Build.VERSION.SDK_INT >= 26 && !a.packageManager.canRequestPackageInstalls()) {
+            if (ViaStore.start(a, apk)) return // lo Store ha già il permesso: il cliente non deve accenderlo per questa app
             // senza il permesso Android non installa: lo si dice chiaramente, si apre la sua schermata e al ritorno si riparte da soli
             afterPerm = apk
             Ui.toast("Manca il permesso «Installa app sconosciute»: attiva «Consenti da questa fonte» per ${a.getString(R.string.app_name)} e torna indietro, l'installazione riparte da sola")
