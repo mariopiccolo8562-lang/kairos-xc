@@ -131,6 +131,8 @@ class LiveActivity : BaseActivity() {
             onFocus = { c, _ -> if (c.id != curCat) { pendingCat = c; App.main.removeCallbacks(loadCatR); App.main.postDelayed(loadCatR, 260) } },
             onClick = { c, _ -> pendingCat = c; App.main.removeCallbacks(loadCatR); loadChannels(focus = true) },
             onRight = { channels.focusVisible() },
+            // cursore arrivato sulle categorie da fuori (pulsanti in alto, elenco aggiornato): torna sulla categoria in uso
+            onStray = { App.main.post { if (!isFinishing && cats.hasFocus()) cats.focusAt(catAdapter.selected) } },
         )
         cats.fast()
         cats.adapter = catAdapter
@@ -522,6 +524,10 @@ class LiveActivity : BaseActivity() {
                     code == KeyEvent.KEYCODE_MENU && e.action == KeyEvent.ACTION_UP -> { toggleFav(h.bindingAdapterPosition); true }
                     // SINISTRA: torna sempre alla categoria in uso, anche dopo aver scorso tanti canali
                     code == KeyEvent.KEYCODE_DPAD_LEFT && e.action == KeyEvent.ACTION_DOWN -> { cats.focusAt(catAdapter.selected); true }
+                    // SU e GIÙ non escono mai dall'elenco: in fondo alla categoria il cursore resta sull'ultimo canale (prima
+                    // saltava su una categoria a sinistra o sui pulsanti del riquadro). Dal primo canale SU va ai pulsanti in alto
+                    (code == KeyEvent.KEYCODE_DPAD_DOWN || code == KeyEvent.KEYCODE_DPAD_UP) && e.action == KeyEvent.ACTION_DOWN ->
+                        channels.keepInside(h.itemView, code == KeyEvent.KEYCODE_DPAD_UP, h.bindingAdapterPosition == 0, cats)
                     else -> false
                 }
             }

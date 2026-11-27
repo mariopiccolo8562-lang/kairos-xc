@@ -60,6 +60,8 @@ class VodActivity : BaseActivity() {
             onFocus = { c, _ -> if (c.id != curCat) { pendingCat = c; App.main.removeCallbacks(loadR); App.main.postDelayed(loadR, 280) } },
             onClick = { c, _ -> pendingCat = c; App.main.removeCallbacks(loadR); load(focus = true) },
             onRight = { focusGrid() },
+            // cursore arrivato sulle categorie da fuori (pulsanti in alto, elenco aggiornato): torna sulla categoria in uso
+            onStray = { App.main.post { if (!isFinishing && cats.hasFocus()) focusCats() } },
         )
         cats.fast()
         cats.adapter = catAdapter
@@ -170,14 +172,30 @@ class VodActivity : BaseActivity() {
         val text = query.text.toString()
         val rec = recentKeys()
         val my = ++seq
+        // aggiornamento in sottofondo: più o meno dove sta guardando il cliente, per preparare lì le righe dell'elenco nuovo
+        val near = if (keep) glm.findFirstVisibleItemPosition().coerceAtLeast(0) else 0
         bg {
             val cur = Db.vod(table, c.id, pls, kids, text, favs, rec)
+            // la finestra del cursore si riempie qui, intorno a quel punto (non sul thread dell'interfaccia)
+            if (keep) try { cur.moveToPosition(near.coerceAtMost((cur.count - 1).coerceAtLeast(0))) } catch (_: Exception) {}
             ui {
                 if (isFinishing || my != seq) { cur.close(); return@ui }
                 val hadFocus = grid.hasFocus()
+                // elenco aggiornato in sottofondo (liste ricaricate): si resta sullo stesso titolo, allo stesso punto dello
+                // schermo. Prima il cursore si perdeva: finiva sui pulsanti in alto e da lì, al primo GIÙ, su una categoria
+                val focusPos = if (keep && hadFocus) grid.focusedChild?.let { grid.getChildAdapterPosition(it) } ?: -1 else -1
+                val anchor = if (!keep) -1 else if (focusPos >= 0) focusPos else glm.findFirstVisibleItemPosition()
+                val anchorTop = if (anchor >= 0) (glm.findViewByPosition(anchor)?.top ?: grid.paddingTop) - grid.paddingTop else 0
+                val anchorK = if (anchor >= 0) keyAt(posters.cursor, anchor) else ""
                 posters.swap(cur)
-                if (!keep) grid.scrollToPosition(0)
                 val n = cur.count
+                if (!keep) grid.scrollToPosition(0)
+                else if (n > 0 && anchor >= 0) {
+                    val at = ListNav.findNear(n, anchor, 200, anchorK) { i -> keyAt(cur, i) }
+                    val to = (if (at >= 0) at else anchor).coerceIn(0, n - 1)
+                    glm.scrollToPositionWithOffset(to, anchorTop)
+                    if (focusPos >= 0) grid.focusWhenReady(to)
+                }
                 empty.visibility = if (n == 0) View.VISIBLE else View.GONE
                 if (n == 0) empty.text = when {
                     text.isNotBlank() -> "Nessun risultato per «$text»"
@@ -202,6 +220,10 @@ class VodActivity : BaseActivity() {
 
     private fun focusCats() = cats.focusAt(catAdapter.selected)
     private fun focusGrid() = grid.focusVisible()
+
+    /** chiave del titolo alla posizione [pos] dell'elenco ('' se non si legge) */
+    private fun keyAt(c: Cursor?, pos: Int): String =
+        try { if (c != null && !c.isClosed && pos >= 0 && c.moveToPosition(pos)) c.getString(1) ?: "" else "" } catch (_: Exception) { "" }
 
     private fun openAt(pos: Int) {
         val c = posters.cursor ?: return
@@ -251,6 +273,10 @@ class VodActivity : BaseActivity() {
                     code == KeyEvent.KEYCODE_DPAD_LEFT && e.action == KeyEvent.ACTION_DOWN && pos >= 0 && pos % glm.spanCount == 0 -> { focusCats(); true }
                     // prima riga: SU va alla ricerca
                     code == KeyEvent.KEYCODE_DPAD_UP && e.action == KeyEvent.ACTION_DOWN && pos in 0 until glm.spanCount -> { query.requestFocus(); true }
+                    // SU e GIÙ non escono mai dalla griglia: in fondo alla categoria il cursore resta sull'ultimo titolo
+                    // (prima saltava su una categoria a sinistra, che caricava la sua lista)
+                    (code == KeyEvent.KEYCODE_DPAD_DOWN || code == KeyEvent.KEYCODE_DPAD_UP) && e.action == KeyEvent.ACTION_DOWN ->
+                        grid.keepInside(h.itemView, code == KeyEvent.KEYCODE_DPAD_UP, false, cats)
                     else -> false
                 }
             }
