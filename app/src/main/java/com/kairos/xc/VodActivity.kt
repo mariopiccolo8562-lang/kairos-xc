@@ -144,7 +144,10 @@ class VodActivity : BaseActivity() {
                 val all = fixedCats(this, table, total, favs.count { f -> pls.any { f.startsWith("$it:") } }, recentKeys().size) + list
                 var idx = all.indexOfFirst { it.id == curCat }
                 if (idx < 0) idx = 0
+                // elenco delle categorie ridisegnato: se il cursore era lì, torna sulla categoria in uso (prima finiva sui pulsanti in alto)
+                val catsHad = cats.hasFocus()
                 catAdapter.set(all, idx)
+                if (catsHad) cats.focusAt(idx)
                 pendingCat = all[idx]
                 load(focus = !refresh, keep = refresh)
             }

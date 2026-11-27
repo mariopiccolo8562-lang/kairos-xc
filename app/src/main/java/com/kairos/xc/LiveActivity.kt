@@ -204,7 +204,10 @@ class LiveActivity : BaseActivity() {
                 val all = fixedCats(this, "live", total, favs.count { f -> pls.any { f.startsWith("$it:") } }) + list
                 var idx = all.indexOfFirst { it.id == curCat }
                 if (idx < 0) { idx = 0; curCat = Db.ALL }
+                // elenco delle categorie ridisegnato: se il cursore era lì, torna sulla categoria in uso (prima finiva sui pulsanti in alto)
+                val catsHad = cats.hasFocus()
                 catAdapter.set(all, idx)
+                if (catsHad) cats.focusAt(idx)
                 pendingCat = all[idx]
                 loadChannels(focus = !refresh)
             }
