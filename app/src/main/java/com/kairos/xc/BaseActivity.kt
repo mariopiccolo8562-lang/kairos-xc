@@ -2,8 +2,14 @@ package com.kairos.xc
 
 import android.app.Activity
 import android.content.Intent
+import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.TextView
 
@@ -22,6 +28,62 @@ abstract class BaseActivity : Activity() {
     }
     private var shieldView: ImageView? = null
     private var dnsView: ImageView? = null
+    private var debtPill: TextView? = null
+
+    override fun onContentChanged() {
+        super.onContentChanged()
+        val content = findViewById<ViewGroup>(android.R.id.content) ?: return
+        debtPill?.let { if (it.parent === content) content.removeView(it) }
+        val pill = TextView(this).apply {
+            setTextColor(Color.WHITE)
+            textSize = 12f
+            typeface = Typeface.DEFAULT_BOLD
+            includeFontPadding = false
+            gravity = Gravity.CENTER
+            setPadding(Ui.dp(this@BaseActivity, 12), Ui.dp(this@BaseActivity, 4), Ui.dp(this@BaseActivity, 12), Ui.dp(this@BaseActivity, 4))
+            background = GradientDrawable().apply {
+                cornerRadius = Ui.dp(this@BaseActivity, 18).toFloat()
+                setColor(Color.argb(200, 150, 20, 30))
+                setStroke(Ui.dp(this@BaseActivity, 1), Color.argb(200, 255, 150, 160))
+            }
+            isFocusable = false
+            isFocusableInTouchMode = false
+            isClickable = false
+            isLongClickable = false
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            elevation = Ui.dp(this@BaseActivity, 8).toFloat()
+        }
+        debtPill = pill
+        val params = FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.CENTER_HORIZONTAL)
+        params.topMargin = Ui.dp(this, if (this is HomeActivity) 88 else 8)
+        content.addView(pill, params)
+        content.post {
+            if (this is HomeActivity) {
+                val headerHeight = findViewById<View>(R.id.topBar)?.height ?: 0
+                params.topMargin = if (headerHeight > 0) headerHeight + Ui.dp(this, 8) else Ui.dp(this, 88)
+                pill.layoutParams = params
+            }
+            debtRefresh()
+        }
+        debtRefresh()
+    }
+
+    fun debtRefresh() {
+        val text = Panel.state?.debt.orEmpty()
+        debtPill?.apply {
+            this.text = if (text.isEmpty()) "" else "⚠ $text"
+            visibility = if (text.isEmpty()) View.GONE else View.VISIBLE
+        }
+        if (this is PlayerActivity) {
+            val notice = findViewById<View>(R.id.notice)
+            val params = notice?.layoutParams as? ViewGroup.MarginLayoutParams
+            if (params != null) {
+                val pillHeight = debtPill?.height?.takeIf { it > 0 } ?: Ui.dp(this, 32)
+                params.topMargin = Ui.dp(this, 28) + if (text.isEmpty()) 0 else pillHeight + Ui.dp(this, 8)
+                notice.layoutParams = params
+            }
+        }
+    }
 
     /**
      * Lucchetto «DNS» accanto allo scudo (13 novembre 2026): c'è quando il fornitore ha acceso il DNS cifrato dal pannello.
@@ -140,7 +202,7 @@ abstract class BaseActivity : Activity() {
         for (ms in longArrayOf(800, 2_000, 4_000, 8_000)) App.main.postDelayed({ if (!isFinishing) shieldRefresh() }, ms)
     }
     /** lo stato dal pannello è cambiato: prima lo scudo, poi la schermata */
-    fun stateChanged() { shieldRefresh(); onStateChanged() }
+    fun stateChanged() { shieldRefresh(); debtRefresh(); onStateChanged() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -205,6 +267,7 @@ abstract class BaseActivity : Activity() {
         }
         if (clockView != null) { App.main.removeCallbacks(clockTick); clockTick.run() }
         shieldRefresh()
+        debtRefresh()
         // «Disconnetti» arrivato mentre si passava da una schermata all'altra
         if (Pulse.pendingKick) { Pulse.pendingKick = false; onKicked() }
         Updater.offer(this) // versione nuova trovata mentre si guardava un canale: la si propone qui

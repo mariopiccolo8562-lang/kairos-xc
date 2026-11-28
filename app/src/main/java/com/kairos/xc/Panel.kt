@@ -168,6 +168,7 @@ class State(
      * il tasto «Aggiorna ora». Vuota = manutenzione vera, o pannello che non la manda.
      */
     val updLock: String = "",
+    @Volatile var debt: String = "",
 ) {
     val active: Boolean get() = status == "active"
     fun perm(k: String): Boolean = perms?.optBoolean(k, true) ?: true
@@ -198,6 +199,7 @@ class State(
                 j.optString("af"),
                 vpnShield = vpn?.optBoolean("shield") == true,
                 updLock = j.optJSONObject("updLock")?.optString("version", "").orEmpty(),
+                debt = DebtNotice.fromRegister(j),
             )
         }
         fun locked() = State("locked", "", "", JSONObject(), emptyList(), emptyList(), null, "off", "", null)

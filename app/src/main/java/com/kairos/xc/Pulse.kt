@@ -181,6 +181,13 @@ object Pulse {
             }
         }
         val s = Panel.state ?: return
+        if (j.has("dbt")) {
+            val debt = DebtNotice.fromHeartbeat(j)
+            if (debt != s.debt) {
+                s.debt = debt
+                (App.top as? BaseActivity)?.debtRefresh()
+            }
+        }
         var changed = false
         val vm = j.optString("vm", "")
         if (vm.isNotEmpty() && vm != s.vpnMode) changed = true
