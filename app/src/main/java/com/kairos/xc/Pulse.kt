@@ -185,7 +185,7 @@ object Pulse {
             val debt = DebtNotice.fromHeartbeat(j)
             if (debt != s.debt) {
                 s.debt = debt
-                (App.top as? BaseActivity)?.debtRefresh()
+                ui { (App.top as? BaseActivity)?.debtRefresh() }
             }
         }
         var changed = false
